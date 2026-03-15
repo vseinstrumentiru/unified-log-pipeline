@@ -1,0 +1,954 @@
+###############################################################################
+# Tests
+###############################################################################
+{% set test_event_date = now(utc=true,fmt='%Y-%m-%dT%H:%M:%SZ') -%}
+# Test event date: {{ test_event_date }}
+
+
+[[tests]]
+  name = "ulp_check_json_route_test"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message без закрывающей фигурной скобки
+      message = '{ "ts": "{{ test_event_date }}","nginx.request_id": "6a432b1e521b042789c1e984aee21127","user": "","client.address": "192.192.192.236","server.address": "nn.example.org","http.request.body.size": "4799","http.response.body.size": "14720","network.protocol.name": "HTTP/1.1","http.request.method": "GET","http.url": "/brand/makita-1/dreli-2/?activeRegionId=-1&id=26","http.request.header.referer": "https://www.example.org/","user_agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0","http.request.duration": "0.3","http.response.status_code": "200","nginx.upstream_addr": "127.0.0.1:4000","nginx.upstream_bytes_received": "14693","upstream_response_time": "0.217","upstream_status": "200" '
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert!(exists(.ObservedTimestamp) == true)
+        assert!(exists(.PipelineError) == true)
+
+        assert_eq!(.PipelineError, "InvalidJson; UnprocessableEntity")
+
+        assert_eq!(.Resource.source_type, "all_logs_get_service_name_remap")
+        assert_eq!(.Resource.stream, "stdout")
+        assert_eq!(.Resource."kubernetes.pod_labels.app_name", "svc_sproduction")
+        assert_eq!(.Resource.k8s_service_name, "test::cluster_name")
+        assert_eq!(.Resource."kubernetes.pod_name", "pcb_svc-7df5b6b4bc-p3w45")
+        assert_eq!(.Resource."kubernetes.pod_labels.pod-template-hash", "7df5b6b4bc")
+        assert_eq!(.Resource."kubernetes.pod_ip", "192.192.192.42")
+        assert_eq!(.Resource."kubernetes.pod_namespace", "test-app-namespace")
+        assert_eq!(.Resource."kubernetes.container_name", "test-app-ws")
+        assert_eq!(.Resource."kubernetes.container_image", "pkg-store/k8s/test-app-ws-image:93dsd2-42")
+        assert_eq!(.Resource."kubernetes.pod_owner", "some_user")
+        assert_eq!(.Resource."kubernetes.node_labels.beta.kubernetes.io/os", "amd64")
+        assert_eq!(.Resource."kubernetes.node_labels.node.deckhouse.io/type", "Static")
+
+        assert_eq!(.Body, "{ \"ts\": \"{{ test_event_date }}\",\"nginx.request_id\": \"6a432b1e521b042789c1e984aee21127\",\"user\": \"\",\"client.address\": \"192.192.192.236\",\"server.address\": \"nn.example.org\",\"http.request.body.size\": \"4799\",\"http.response.body.size\": \"14720\",\"network.protocol.name\": \"HTTP/1.1\",\"http.request.method\": \"GET\",\"http.url\": \"/brand/makita-1/dreli-2/?activeRegionId=-1&id=26\",\"http.request.header.referer\": \"https://www.example.org/\",\"user_agent\": \"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0\",\"http.request.duration\": \"0.3\",\"http.response.status_code\": \"200\",\"nginx.upstream_addr\": \"127.0.0.1:4000\",\"nginx.upstream_bytes_received\": \"14693\",\"upstream_response_time\": \"0.217\",\"upstream_status\": \"200\" ")
+       '''
+
+###############################################################################
+[[tests]]
+  name = "ulp_check_json_route_no_outputs_test"
+  no_outputs_from = ["ulp_check_json_route.parsed_log_records"]
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message без закрывающей фигурной скобки
+      message = '{ "ts": "{{ test_event_date }}","nginx.request_id": "6a432b1e521b042789c1e984aee21127","user": "","client.address": "192.192.192.236","server.address": "nn.example.org","http.request.body.size": "4799","http.response.body.size": "14720","network.protocol.name": "HTTP/1.1","http.request.method": "GET","http.url": "/brand/makita-1/dreli-2/?activeRegionId=-1&id=26","http.request.header.referer": "https://www.example.org/","user_agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0","http.request.duration": "0.3","http.response.status_code": "200","nginx.upstream_addr": "127.0.0.1:4000","nginx.upstream_bytes_received": "14693","upstream_response_time": "0.217","upstream_status": "200" '
+
+###############################################################################
+[[tests]]
+  name = "ulp_truncate_long_message: it truncates message over {{ unified_log_pipeline_vars.max_message_length }}"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message, длиной более 64 кб
+      message = '{{ '1' * unified_log_pipeline_vars.max_message_length  }}_a_eto_doljno_bit_otrezano'
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert!(exists(.ObservedTimestamp) == true)
+        assert!(exists(.PipelineError) == true)
+
+        assert_eq!(.PipelineError, "Trancated; UnprocessableEntity")
+
+        assert_eq!(.Resource.source_type, "all_logs_get_service_name_remap")
+        assert_eq!(.Resource.stream, "stdout")
+        assert_eq!(.Resource."kubernetes.pod_labels.app_name", "svc_sproduction")
+        assert_eq!(.Resource.k8s_service_name, "test::cluster_name")
+        assert_eq!(.Resource."kubernetes.pod_name", "pcb_svc-7df5b6b4bc-p3w45")
+        assert_eq!(.Resource."kubernetes.pod_labels.pod-template-hash", "7df5b6b4bc")
+        assert_eq!(.Resource."kubernetes.pod_ip", "192.192.192.42")
+        assert_eq!(.Resource."kubernetes.pod_namespace", "test-app-namespace")
+        assert_eq!(.Resource."kubernetes.container_name", "test-app-ws")
+        assert_eq!(.Resource."kubernetes.container_image", "pkg-store/k8s/test-app-ws-image:93dsd2-42")
+        assert_eq!(.Resource."kubernetes.pod_owner", "some_user")
+        assert_eq!(.Resource."kubernetes.node_labels.beta.kubernetes.io/os", "amd64")
+        assert_eq!(.Resource."kubernetes.node_labels.node.deckhouse.io/type", "Static")
+
+        assert_eq!(.Body, "{{ '1' * unified_log_pipeline_vars.max_message_length }}..." )
+       '''
+
+###############################################################################
+[[tests]]
+  name = "ulp_check_length: it has no output to correct_logs_length route if message len > {{ unified_log_pipeline_vars.max_message_length }}"
+  no_outputs_from = ["ulp_check_length.correct_logs_length"]
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message, длиной более 64 кб
+      message = '{{ '1' * unified_log_pipeline_vars.max_message_length }}_a_eto_doljno_bit_otrezano_2'
+
+###############################################################################
+[[tests]]
+  name = "ulp_prepare_timestamp: it moves nonstandard timestamp field values to ts field"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+      "kubernetes.pod_labels.app_name" = "circuit-breaker-svc_st"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "circuit-breaker-svc_ssvc_f-697c965b5d-64dpl"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "697c965b5d"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "nginx"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "abc"
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      message = '{ "timestamp": "{{ test_event_date }}","nginx.request_id": "827403c0461180bfdc56dcceeea8f6ae","user": "","client.address": "192.192.192.205","http.request.body.size": 382,"http.response.body.size": 6859,"network.protocol.name": "HTTP/1.1","url.scheme": "http","http.request.method": "GET","server.address": "svc_f-local","url.path": "/sgd/sgs/api/4_1/rs/findById/party","url.query": "query=7736207494&count=300&status=ACTIVE","url.full": "http://svc_f-local:80/sgd/sgs/api/4_1/rs/findById/party?query=7736207494&count=300&status=ACTIVE","http.request.header.referer": "","user_agent": "GuzzleHttp/6.5.5 curl/7.68.0 PHP/8.0.30","http.request.duration": 0.110,"http.response.status_code": 200,"upstream.server.address": "192.192.192.50:443","upstream.http.response.body.size": "7447","upstream.http.request.duration": "0.108","upstream.http.response.length": "6846","upstream.http.response.status_code": "200","upstream.cache.status": "","redirect": "","rewrited": "/sgd/sgs/api/4_1/rs/findById/party?query=7736207494&count=300&status=ACTIVE","location": "svc_f_root"}'
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.PipelineError, "NonStandardTimeField")
+        assert_eq!(.Timestamp, to_unix_timestamp(t'{{ test_event_date }}', "nanoseconds"))
+      '''
+
+###############################################################################
+[[tests]]
+  name = "ulp_prepare_timestamp: it accept datetime as standard timestamp field"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+      "kubernetes.pod_labels.app_name" = "circuit-breaker-svc_st"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "circuit-breaker-svc_ssvc_f-697c965b5d-64dpl"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "697c965b5d"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "nginx"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "abc"
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      message = '{ "datetime": "{{ test_event_date }}","nginx.request_id": "827403c0461180bfdc56dcceeea8f6ae","user": "","client.address": "192.192.192.205","http.request.body.size": 382,"http.response.body.size": 6859,"network.protocol.name": "HTTP/1.1","url.scheme": "http","http.request.method": "GET","server.address": "svc_f-local","url.path": "/sgd/sgs/api/4_1/rs/findById/party","url.query": "query=7736207494&count=300&status=ACTIVE","url.full": "http://svc_f-local:80/sgd/sgs/api/4_1/rs/findById/party?query=7736207494&count=300&status=ACTIVE","http.request.header.referer": "","user_agent": "GuzzleHttp/6.5.5 curl/7.68.0 PHP/8.0.30","http.request.duration": 0.110,"http.response.status_code": 200,"upstream.server.address": "192.192.192.50:443","upstream.http.response.body.size": "7447","upstream.http.request.duration": "0.108","upstream.http.response.length": "6846","upstream.http.response.status_code": "200","upstream.cache.status": "","redirect": "","rewrited": "/sgd/sgs/api/4_1/rs/findById/party?query=7736207494&count=300&status=ACTIVE","location": "svc_f_root"}'
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.PipelineError, "")
+        assert_eq!(.Timestamp, to_unix_timestamp(t'{{ test_event_date }}', "nanoseconds"))
+      '''
+
+###############################################################################
+[[tests]]
+  name = "ulp_check_unix_timestamp: no timestamp sets NoTimestamp pipeline error"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+      "kubernetes.pod_labels.app_name" = "circuit-breaker-svc_st"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "circuit-breaker-svc_ssvc_f-697c965b5d-64dpl"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "697c965b5d"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "nginx"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "abc"
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      message = '{ "nginx.request_id": "827403c0461180bfdc56dcceeea8f6ae","user": "","client.address": "192.192.192.205","http.request.body.size": 382,"http.response.body.size": 6859,"network.protocol.name": "HTTP/1.1","url.scheme": "http","http.request.method": "GET","server.address": "svc_f-local","url.path": "/sgd/sgs/api/4_1/rs/findById/party","url.query": "query=7736207494&count=300&status=ACTIVE","url.full": "http://svc_f-local:80/sgd/sgs/api/4_1/rs/findById/party?query=7736207494&count=300&status=ACTIVE","http.request.header.referer": "","user_agent": "GuzzleHttp/6.5.5 curl/7.68.0 PHP/8.0.30","http.request.duration": 0.110,"http.response.status_code": 200,"upstream.server.address": "192.192.192.50:443","upstream.http.response.body.size": "7447","upstream.http.request.duration": "0.108","upstream.http.response.length": "6846","upstream.http.response.status_code": "200","upstream.cache.status": "","redirect": "","rewrited": "/sgd/sgs/api/4_1/rs/findById/party?query=7736207494&count=300&status=ACTIVE","location": "svc_f_root"}'
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert!(exists(.PipelineError) == true)
+        assert!(exists(.Timestamp) == false)
+        assert_eq!(.PipelineError, "TimestampError; NoTimestamp")
+      '''
+
+
+###############################################################################
+[[tests]]
+  name = "ulp_check_unix_timestamp: if timestamp not convertable to string set InvalidTimestampType pipeline error"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+      "kubernetes.pod_labels.app_name" = "circuit-breaker-svc_st"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "circuit-breaker-svc_ssvc_f-697c965b5d-64dpl"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "697c965b5d"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "nginx"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "abc"
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      message = '{ "ts": ["{{ test_event_date }}"], "nginx.request_id": "827403c0461180bfdc56dcceeea8f6ae","user": "","client.address": "192.192.192.205","http.request.body.size": 382,"http.response.body.size": 6859,"network.protocol.name": "HTTP/1.1","url.scheme": "http","http.request.method": "GET","server.address": "svc_f-local","url.path": "/sgd/sgs/api/4_1/rs/findById/party","url.query": "query=7736207494&count=300&status=ACTIVE","url.full": "http://svc_f-local:80/sgd/sgs/api/4_1/rs/findById/party?query=7736207494&count=300&status=ACTIVE","http.request.header.referer": "","user_agent": "GuzzleHttp/6.5.5 curl/7.68.0 PHP/8.0.30","http.request.duration": 0.110,"http.response.status_code": 200,"upstream.server.address": "192.192.192.50:443","upstream.http.response.body.size": "7447","upstream.http.request.duration": "0.108","upstream.http.response.length": "6846","upstream.http.response.status_code": "200","upstream.cache.status": "","redirect": "","rewrited": "/sgd/sgs/api/4_1/rs/findById/party?query=7736207494&count=300&status=ACTIVE","location": "svc_f_root"}'
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert!(exists(.PipelineError) == true)
+        assert!(exists(.Timestamp) == false)
+        assert_eq!(.PipelineError, "TimestampError; InvalidTimestampType")
+      '''
+
+###############################################################################
+[[tests]]
+  name = "ulp_check_unix_timestamp: if timestamp not valid date set InvalidTimestamp pipeline error"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+      "kubernetes.pod_labels.app_name" = "circuit-breaker-svc_st"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "circuit-breaker-svc_ssvc_f-697c965b5d-64dpl"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "697c965b5d"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "nginx"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "abc"
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      message = '{ "ts": "2023-02-34T58:123:1007", "nginx.request_id": "827403c0461180bfdc56dcceeea8f6ae","user": "","client.address": "192.192.192.205","http.request.body.size": 382,"http.response.body.size": 6859,"network.protocol.name": "HTTP/1.1","url.scheme": "http","http.request.method": "GET","server.address": "svc_f-local","url.path": "/sgd/sgs/api/4_1/rs/findById/party","url.query": "query=7736207494&count=300&status=ACTIVE","url.full": "http://svc_f-local:80/sgd/sgs/api/4_1/rs/findById/party?query=7736207494&count=300&status=ACTIVE","http.request.header.referer": "","user_agent": "GuzzleHttp/6.5.5 curl/7.68.0 PHP/8.0.30","http.request.duration": 0.110,"http.response.status_code": 200,"upstream.server.address": "192.192.192.50:443","upstream.http.response.body.size": "7447","upstream.http.request.duration": "0.108","upstream.http.response.length": "6846","upstream.http.response.status_code": "200","upstream.cache.status": "","redirect": "","rewrited": "/sgd/sgs/api/4_1/rs/findById/party?query=7736207494&count=300&status=ACTIVE","location": "svc_f_root"}'
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert!(exists(.PipelineError) == true)
+        assert!(exists(.Timestamp) == false)
+        assert_eq!(.PipelineError, "TimestampError; InvalidTimestamp")
+      '''
+
+###############################################################################
+[[tests]]
+  name = "ulp_check_unix_timestamp: if timestamp year 1978 < 2000 set UnacceptableDate pipeline error"
+
+  [[tests.inputs]]
+    insert_at = "ulp_check_unix_timestamp"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      "log_record.ts" = "1978-02-13T10:23:07.987000000+03:00"
+
+  [[tests.outputs]]
+    extract_from = "ulp_check_unix_timestamp"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert!(exists(.log_record.ts))
+        assert!(includes(array!(._PipelineError), "UnacceptableDate"))
+      '''
+
+###############################################################################
+[[tests]]
+  name = "ulp_check_unix_timestamp: if timestamp year 24 < 2000 set UnacceptableDate pipeline error"
+
+  [[tests.inputs]]
+    insert_at = "ulp_check_unix_timestamp"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      "log_record.ts" = "24-02-13T10:23:07.987000000+03:00"
+
+  [[tests.outputs]]
+    extract_from = "ulp_check_unix_timestamp"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert!(exists(.log_record.ts))
+        assert!(includes(array!(._PipelineError), "UnacceptableDate"))
+      '''
+
+###############################################################################
+[[tests]]
+  name = "ulp_level_filter_test"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message с level, проходящим фильтр ulp_level_filter
+      message = '{ "ts": "{{ test_event_date }}", "msg": "Запуск умного резерва", "level": "DEBUG123", "svc_A.zakaz.id": "12344234", "user.id": "svc_A-user-id", "trace_id": "232342343", "span_id": "34456373467456", "trace_flags": "0" }'
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert!(exists(.ObservedTimestamp) == true)
+        assert!(exists(.PipelineError) == true)
+
+        assert_eq!(.Resource.source_type, "all_logs_get_service_name_remap")
+        assert_eq!(.Resource.stream, "stdout")
+        assert_eq!(.Resource."kubernetes.pod_labels.app_name", "svc_sproduction")
+        assert_eq!(.Resource.k8s_service_name, "test::cluster_name")
+        assert_eq!(.Resource."kubernetes.pod_name", "pcb_svc-7df5b6b4bc-p3w45")
+        assert_eq!(.Resource."kubernetes.pod_labels.pod-template-hash", "7df5b6b4bc")
+        assert_eq!(.Resource."kubernetes.pod_ip", "192.192.192.42")
+        assert_eq!(.Resource."kubernetes.pod_namespace", "test-app-namespace")
+        assert_eq!(.Resource."kubernetes.container_name", "test-app-ws")
+        assert_eq!(.Resource."kubernetes.container_image", "pkg-store/k8s/test-app-ws-image:93dsd2-42")
+        assert_eq!(.Resource."kubernetes.pod_owner", "some_user")
+        assert_eq!(.Resource."kubernetes.node_labels.beta.kubernetes.io/os", "amd64")
+        assert_eq!(.Resource."kubernetes.node_labels.node.deckhouse.io/type", "Static")
+
+        assert!(exists(.Timestamp) == true)
+        assert_eq!(.SeverityText, "DEBUG123")
+        assert!(exists(.SeverityNumber) == true)
+        assert_eq!(.Body, "Запуск умного резерва")
+        assert_eq!(.TraceId, "232342343")
+        assert_eq!(.SpanId, "34456373467456")
+        assert_eq!(.TraceFlags, "0")
+        assert!(exists(.InstrumentationScope) == true)
+        assert_eq!(.Attributes."user.id", "svc_A-user-id")
+        assert_eq!(.Attributes."svc_A.zakaz.id", "12344234")
+       '''
+
+###############################################################################
+
+[[tests]]
+  name = "ulp_message_processing: it takes ServiceName from resource service.name field and ignores other specs"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+      '"service.name"' = "service-name-set-at-resource-level-by-agent"
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "IT MUST BE IGNORED as SERVICE NAME"
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message с level, проходящим фильтр ulp_level_filter
+      message = '{ "ts": "{{ test_event_date }}", "msg": "Запуск умного резерва", "level": "DEBUG123", "svc_A.zakaz.id": "12344234", "user.id": "svc_A-user-id", "trace_id": "232342343", "span_id": "34456373467456", "trace_flags": "0" }'
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.ServiceName, "service-name-set-at-resource-level-by-agent")
+       '''
+
+###############################################################################
+
+[[tests]]
+  name = "ulp_message_processing: it takes ServiceName from annotations"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sdlv-production"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "svc_sdlv"
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message с level, проходящим фильтр ulp_level_filter
+      message = '{ "ts": "{{ test_event_date }}", "msg": "Запуск умного резерва", "level": "DEBUG123", "svc_A.zakaz.id": "12344234", "user.id": "svc_A-user-id", "trace_id": "232342343", "span_id": "34456373467456", "trace_flags": "0" }'
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.ServiceName, "svc_sdlv")
+      '''
+
+###############################################################################
+[[tests]]
+  name = "ulp_level_filter_no_outputs_test"
+  no_outputs_from = ["ulp_level_filter"]
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message с level, не проходящим фильтр ulp_level_filter
+      message = '{ "ts": "{{ test_event_date }}", "msg": "Запуск умного резерва", "level": "DEBUG", "svc_A.zakaz.id": "12344234", "user.id": "svc_A-user-id", "trace_id": "232342343", "span_id": "34456373467456", "trace_flags": "0" }'
+
+###############################################################################
+[[tests]]
+  name = "ulp_level_filter_no_outputs_upcase_test"
+  no_outputs_from = ["ulp_level_filter"]
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message с level, не проходящим фильтр ulp_level_filter с проверкой функции upcase()
+      message = '{ "ts": "{{ test_event_date }}", "msg": "Запуск умного резерва", "level": "debug", "svc_A.zakaz.id": "12344234", "user.id": "svc_A-user-id", "trace_id": "232342343", "span_id": "34456373467456", "trace_flags": "0" }'
+
+###############################################################################
+[[tests]]
+  name = "ulp_url_filter_test"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message с полем uri(path) в http.url, не подходящим под фильтр ulp_url_filter
+      message = '{ "ts": "{{ test_event_date }}","nginx.request_id": "6a432b1e521b042789c1e984aee21127","user": "user123","client.address": "192.192.192.236","server.address": "nn.example.org","http.request.body.size": "4799","http.response.body.size": "14720","network.protocol.name": "HTTP/1.1","http.request.method": "GET","http.url": "https://vector.dev/docs/reference/vrl/functions/#array","http.request.header.referer": "https://www.example.org/","user_agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0","http.request.duration": "0.3","http.response.status_code": "200","nginx.upstream_addr": "127.0.0.1:4000","nginx.upstream_bytes_received": "14693","upstream_response_time": "0.217","upstream_status": "200" }'
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.Resource.source_type, "all_logs_get_service_name_remap")
+        assert_eq!(.Resource.stream, "stdout")
+        assert_eq!(.Resource."kubernetes.pod_labels.app_name", "svc_sproduction")
+        assert_eq!(.Resource.k8s_service_name, "test::cluster_name")
+        assert_eq!(.Resource."kubernetes.pod_name", "pcb_svc-7df5b6b4bc-p3w45")
+        assert_eq!(.Resource."kubernetes.pod_labels.pod-template-hash", "7df5b6b4bc")
+        assert_eq!(.Resource."kubernetes.pod_ip", "192.192.192.42")
+        assert_eq!(.Resource."kubernetes.pod_namespace", "test-app-namespace")
+        assert_eq!(.Resource."kubernetes.container_name", "test-app-ws")
+        assert_eq!(.Resource."kubernetes.container_image", "pkg-store/k8s/test-app-ws-image:93dsd2-42")
+        assert_eq!(.Resource."kubernetes.pod_owner", "some_user")
+        assert_eq!(.Resource."kubernetes.node_labels.beta.kubernetes.io/os", "amd64")
+        assert_eq!(.Resource."kubernetes.node_labels.node.deckhouse.io/type", "Static")
+
+        assert!(exists(.ObservedTimestamp) == true)
+
+        assert!(exists(.Timestamp) == true)
+        assert!(exists(.SeverityNumber) == true)
+        assert_eq!(.SeverityNumber, null)
+
+        assert!(exists(.InstrumentationScope) == true)
+        assert_eq!(.InstrumentationScope, null)
+
+        assert!(exists(.PipelineError) == true)
+        assert_eq!(.PipelineError, "")
+
+        assert_eq!(.Attributes."client.address", "192.192.192.236")
+        assert_eq!(.Attributes."server.address", "nn.example.org")
+        assert_eq!(.Attributes."http.request.body.size", "4799")
+        assert_eq!(.Attributes."http.request.duration", "0.3")
+        assert_eq!(.Attributes."http.request.header.referer", "https://www.example.org/")
+        assert_eq!(.Attributes."http.request.method", "GET")
+        assert_eq!(.Attributes."http.response.body.size", "14720")
+        assert_eq!(.Attributes."http.response.status_code", "200")
+        assert_eq!(.Attributes."network.protocol.name", "HTTP/1.1")
+        assert_eq!(.Attributes."nginx.request_id", "6a432b1e521b042789c1e984aee21127")
+        assert_eq!(.Attributes."nginx.upstream_addr", "127.0.0.1:4000")
+        assert_eq!(.Attributes."nginx.upstream_bytes_received", "14693")
+        assert_eq!(.Attributes."upstream_response_time", "0.217")
+        assert_eq!(.Attributes."upstream_status", "200")
+        assert_eq!(.Attributes."url.host", "vector.dev")
+        assert_eq!(.Attributes."url.scheme", "https")
+        assert_eq!(.Attributes."user_agent", "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0")
+        assert_eq!(.Attributes."user", "user123")
+       '''
+
+###############################################################################
+
+[[tests]]
+  name = "ulp_url_filter_no_outputs_test"
+  no_outputs_from = ["ulp_url_filter"]
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message с полем uri(path) в http.url, подходящим под фильтр ulp_url_filter
+      message = '{ "ts": "{{ test_event_date }}","nginx.request_id": "6a432b1e521b042789c1e984aee21127","user": "user123","client.address": "192.192.192.236","server.address": "nn.example.org","http.request.body.size": "4799","http.response.body.size": "14720","network.protocol.name": "HTTP/1.1","http.request.method": "GET","http.url": "https://vector.dev/healthz#array","http.request.header.referer": "https://www.example.org/","user_agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0","http.request.duration": "0.3","http.response.status_code": "200","nginx.upstream_addr": "127.0.0.1:4000","nginx.upstream_bytes_received": "14693","upstream_response_time": "0.217","upstream_status": "200" }'
+
+###############################################################################
+[[tests]]
+  name = "ulp: it processes service_svc_mz logs"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      message = '{"service.name":"svc_mz","exception.stacktrace":"Z29yb3V0aW5lIDIxNTQ1IFtydW5uaW5nXToKcnVudGltZS9kZWJ1Zy5TdGFjaygpCgkvdXNyL2xvY2FsL2dvL3NyYy9ydW50aW1lL2RlYnVnL3N0YWNrLmdvOjI0ICsweDY1CmdpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL3psb2cvdjIuTWFyc2hhbFN0YWNrKHsweDA/LCAweDA/fSkKCS9zcmMvdmVuZG9yL2dpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL3psb2cvdjIvbWFyc2hhbGxlci5nbzo2MCArMHgxMjUKZ2l0aHViLmNvbS9ycy96ZXJvbG9nLigqRXZlbnQpLkVycigweGMwMDAxODgyYTAsIHsweDAsIDB4MH0pCgkvc3JjL3ZlbmRvci9naXRodWIuY29tL3JzL3plcm9sb2cvZXZlbnQuZ286Mzk1ICsweDYzCmdpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL21pZGRsZXdhcmUuZ3JwY0FjY2Vzc0xvZ0V2ZW50KHsweDE0MjA0NzgsIDB4YzAwMDQxMzI2MH0sIDB4N2ZjNjFmNWY2ODkwPywgezB4MTIyZGEzOSwgMHgxOH0sIHsweGMwMDA0ODAwMDA/LCAweGMwMDA4NjZlYzA/LCAweDFjOTE5NDA/fSwgezB4MCwgMHgwfSkKCS9zcmMvdmVuZG9yL2dpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL21pZGRsZXdhcmUvZ3JwYy1hY2Nlc3MtbG9nLmdvOjcxICsweGU1CmdpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL21pZGRsZXdhcmUuR1JQQ0FjY2Vzc0xvZ1VuYXJ5U2VydmVySW50ZXJjZXB0b3IuZnVuYzEoezB4MTQyMDQ3OCwgMHhjMDAwNDEzMjYwfSwgezB4MTFhM2Q0MCwgMHhjMDAwNjYxMTEwfSwgMHhjMDAwMGJhYWEwLCAweGMwMDA4NjZlYzApCgkvc3JjL3ZlbmRvci9naXQudnNlaW5zdHJ1bWVudGkubmV0L3BrZy9taWRkbGV3YXJlL2dycGMtYWNjZXNzLWxvZy5nbzoyOSArMHgxMmIKZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy5nZXRDaGFpblVuYXJ5SGFuZGxlci5mdW5jMSh7MHgxNDIwNDc4LCAweGMwMDA0MTMyNjB9LCB7MHgxMWEzZDQwLCAweGMwMDA2NjExMTB9KQoJL3NyYy92ZW5kb3IvZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy9zZXJ2ZXIuZ286MTE2MyArMHhiOQpnaXRodWIuY29tL2dycGMtZWNvc3lzdGVtL2dvLWdycGMtbWlkZGxld2FyZS9yZWNvdmVyeS5VbmFyeVNlcnZlckludGVyY2VwdG9yLmZ1bmMxKHsweDE0MjA0Nzg/LCAweGMwMDA0MTMyNjA/fSwgezB4MTFhM2Q0MD8sIDB4YzAwMDY2MTExMD99LCAweGMwMDAwYmFhYTA/LCAweGMwMDBiZjRlMjg/KQoJL3NyYy92ZW5kb3IvZ2l0aHViLmNvbS9ncnBjLWVjb3N5c3RlbS9nby1ncnBjLW1pZGRsZXdhcmUvcmVjb3ZlcnkvaW50ZXJjZXB0b3JzLmdvOjMzICsweGM0Cmdvb2dsZS5nb2xhbmcub3JnL2dycGMuY2hhaW5VbmFyeUludGVyY2VwdG9ycy5mdW5jMSh7MHgxNDIwNDc4LCAweGMwMDA0MTMyNjB9LCB7MHgxMWEzZDQwLCAweGMwMDA2NjExMTB9LCAweGMwMDA4NzJhMDA/LCAweDEwOTYwMjA/KQoJL3NyYy92ZW5kb3IvZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy9zZXJ2ZXIuZ286MTE1NCArMHg4ZgpnaXQudnNlaW5zdHJ1bWVudGkubmV0L2tkL21zLXpuYWsvZG9jcy9wcm90by9nZW4uX0FQSV9TZWxsUHJvZHVjdF9IYW5kbGVyKHsweDExYWRmZTA/LCAweGMwMDAzZDg0MzB9LCB7MHgxNDIwNDc4LCAweGMwMDA0MTMyNjB9LCAweGMwMDAwZTJkMDAsIDB4YzAwMDNiYTQyMCkKCS9zcmMvZG9jcy9wcm90by9nZW4vbXMtem5ha19ncnBjLnBiLmdvOjM0NSArMHgxMzgKZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy4oKlNlcnZlcikucHJvY2Vzc1VuYXJ5UlBDKDB4YzAwMDY3YzAwMCwgezB4MTQyMDQ3OCwgMHhjMDAwNDEzMDgwfSwgezB4MTQyOWY0MCwgMHhjMDAwYzY3MzgwfSwgMHhjMDAwMGVjZWEwLCAweGMwMDA2NDRhODAsIDB4MWM4MTQ1OCwgMHgwKQoJL3NyYy92ZW5kb3IvZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy9zZXJ2ZXIuZ286MTM0MyArMHhlNDkKZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy4oKlNlcnZlcikuaGFuZGxlU3RyZWFtKDB4YzAwMDY3YzAwMCwgezB4MTQyOWY0MCwgMHhjMDAwYzY3MzgwfSwgMHhjMDAwMGVjZWEwKQoJL3NyYy92ZW5kb3IvZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy9zZXJ2ZXIuZ286MTczNyArMHhjYTYKZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy4oKlNlcnZlcikuc2VydmVTdHJlYW1zLmZ1bmMxLjEoKQoJL3NyYy92ZW5kb3IvZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy9zZXJ2ZXIuZ286OTg2ICsweDhjCmNyZWF0ZWQgYnkgZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy4oKlNlcnZlcikuc2VydmVTdHJlYW1zLmZ1bmMxCgkvc3JjL3ZlbmRvci9nb29nbGUuZ29sYW5nLm9yZy9ncnBjL3NlcnZlci5nbzo5OTcgKzB4MTVjCg==","logging.vi.ru/structure":"access","trace_id":"00000000000000000000000000000000","trace_flags":"00","rpc.server.duration":1,"user_agent.original":"svc_A-svc_mz-client grpc-php/1.49.0 grpc-c/27.0.0 (linux; chttp2)","rpc.method":"SellProduct","rpc.grpc.status_code":0,"client.address":"192.192.192.41:58930","rpc.server.request.size":151,"rpc.server.response.size":2,"ts":"{{ test_event_date }}","caller":"/src/vendor/git.acme.org/pkg/middleware/grpc-access-log.go:32"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.Resource.source_type, "all_logs_get_service_name_remap")
+        assert_eq!(.Resource.stream, "stdout")
+        assert_eq!(.Resource."kubernetes.pod_labels.app_name", "svc_sproduction")
+        assert_eq!(.Resource.k8s_service_name, "test::cluster_name")
+        assert_eq!(.Resource."kubernetes.pod_name", "pcb_svc-7df5b6b4bc-p3w45")
+        assert_eq!(.Resource."kubernetes.pod_labels.pod-template-hash", "7df5b6b4bc")
+        assert_eq!(.Resource."kubernetes.pod_ip", "192.192.192.42")
+        assert_eq!(.Resource."kubernetes.pod_namespace", "test-app-namespace")
+        assert_eq!(.Resource."kubernetes.container_name", "test-app-ws")
+        assert_eq!(.Resource."kubernetes.container_image", "pkg-store/k8s/test-app-ws-image:93dsd2-42")
+        assert_eq!(.Resource."kubernetes.pod_owner", "some_user")
+        assert_eq!(.Resource."kubernetes.node_labels.beta.kubernetes.io/os", "amd64")
+        assert_eq!(.Resource."kubernetes.node_labels.node.deckhouse.io/type", "Static")
+
+        assert!(exists(.ObservedTimestamp) == true)
+
+        assert!(exists(.Timestamp) == true)
+
+        assert!(exists(.SeverityNumber) == true)
+        assert_eq!(.SeverityNumber, null)
+
+        assert!(exists(.InstrumentationScope) == true)
+        assert_eq!(.InstrumentationScope, null)
+
+        assert!(exists(.PipelineError) == true)
+        assert_eq!(.PipelineError, "")
+
+        assert_eq!(.Attributes."service.name", "svc_mz")
+        assert_eq!(.Attributes."exception.stacktrace", "Z29yb3V0aW5lIDIxNTQ1IFtydW5uaW5nXToKcnVudGltZS9kZWJ1Zy5TdGFjaygpCgkvdXNyL2xvY2FsL2dvL3NyYy9ydW50aW1lL2RlYnVnL3N0YWNrLmdvOjI0ICsweDY1CmdpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL3psb2cvdjIuTWFyc2hhbFN0YWNrKHsweDA/LCAweDA/fSkKCS9zcmMvdmVuZG9yL2dpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL3psb2cvdjIvbWFyc2hhbGxlci5nbzo2MCArMHgxMjUKZ2l0aHViLmNvbS9ycy96ZXJvbG9nLigqRXZlbnQpLkVycigweGMwMDAxODgyYTAsIHsweDAsIDB4MH0pCgkvc3JjL3ZlbmRvci9naXRodWIuY29tL3JzL3plcm9sb2cvZXZlbnQuZ286Mzk1ICsweDYzCmdpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL21pZGRsZXdhcmUuZ3JwY0FjY2Vzc0xvZ0V2ZW50KHsweDE0MjA0NzgsIDB4YzAwMDQxMzI2MH0sIDB4N2ZjNjFmNWY2ODkwPywgezB4MTIyZGEzOSwgMHgxOH0sIHsweGMwMDA0ODAwMDA/LCAweGMwMDA4NjZlYzA/LCAweDFjOTE5NDA/fSwgezB4MCwgMHgwfSkKCS9zcmMvdmVuZG9yL2dpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL21pZGRsZXdhcmUvZ3JwYy1hY2Nlc3MtbG9nLmdvOjcxICsweGU1CmdpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL21pZGRsZXdhcmUuR1JQQ0FjY2Vzc0xvZ1VuYXJ5U2VydmVySW50ZXJjZXB0b3IuZnVuYzEoezB4MTQyMDQ3OCwgMHhjMDAwNDEzMjYwfSwgezB4MTFhM2Q0MCwgMHhjMDAwNjYxMTEwfSwgMHhjMDAwMGJhYWEwLCAweGMwMDA4NjZlYzApCgkvc3JjL3ZlbmRvci9naXQudnNlaW5zdHJ1bWVudGkubmV0L3BrZy9taWRkbGV3YXJlL2dycGMtYWNjZXNzLWxvZy5nbzoyOSArMHgxMmIKZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy5nZXRDaGFpblVuYXJ5SGFuZGxlci5mdW5jMSh7MHgxNDIwNDc4LCAweGMwMDA0MTMyNjB9LCB7MHgxMWEzZDQwLCAweGMwMDA2NjExMTB9KQoJL3NyYy92ZW5kb3IvZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy9zZXJ2ZXIuZ286MTE2MyArMHhiOQpnaXRodWIuY29tL2dycGMtZWNvc3lzdGVtL2dvLWdycGMtbWlkZGxld2FyZS9yZWNvdmVyeS5VbmFyeVNlcnZlckludGVyY2VwdG9yLmZ1bmMxKHsweDE0MjA0Nzg/LCAweGMwMDA0MTMyNjA/fSwgezB4MTFhM2Q0MD8sIDB4YzAwMDY2MTExMD99LCAweGMwMDAwYmFhYTA/LCAweGMwMDBiZjRlMjg/KQoJL3NyYy92ZW5kb3IvZ2l0aHViLmNvbS9ncnBjLWVjb3N5c3RlbS9nby1ncnBjLW1pZGRsZXdhcmUvcmVjb3ZlcnkvaW50ZXJjZXB0b3JzLmdvOjMzICsweGM0Cmdvb2dsZS5nb2xhbmcub3JnL2dycGMuY2hhaW5VbmFyeUludGVyY2VwdG9ycy5mdW5jMSh7MHgxNDIwNDc4LCAweGMwMDA0MTMyNjB9LCB7MHgxMWEzZDQwLCAweGMwMDA2NjExMTB9LCAweGMwMDA4NzJhMDA/LCAweDEwOTYwMjA/KQoJL3NyYy92ZW5kb3IvZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy9zZXJ2ZXIuZ286MTE1NCArMHg4ZgpnaXQudnNlaW5zdHJ1bWVudGkubmV0L2tkL21zLXpuYWsvZG9jcy9wcm90by9nZW4uX0FQSV9TZWxsUHJvZHVjdF9IYW5kbGVyKHsweDExYWRmZTA/LCAweGMwMDAzZDg0MzB9LCB7MHgxNDIwNDc4LCAweGMwMDA0MTMyNjB9LCAweGMwMDAwZTJkMDAsIDB4YzAwMDNiYTQyMCkKCS9zcmMvZG9jcy9wcm90by9nZW4vbXMtem5ha19ncnBjLnBiLmdvOjM0NSArMHgxMzgKZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy4oKlNlcnZlcikucHJvY2Vzc1VuYXJ5UlBDKDB4YzAwMDY3YzAwMCwgezB4MTQyMDQ3OCwgMHhjMDAwNDEzMDgwfSwgezB4MTQyOWY0MCwgMHhjMDAwYzY3MzgwfSwgMHhjMDAwMGVjZWEwLCAweGMwMDA2NDRhODAsIDB4MWM4MTQ1OCwgMHgwKQoJL3NyYy92ZW5kb3IvZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy9zZXJ2ZXIuZ286MTM0MyArMHhlNDkKZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy4oKlNlcnZlcikuaGFuZGxlU3RyZWFtKDB4YzAwMDY3YzAwMCwgezB4MTQyOWY0MCwgMHhjMDAwYzY3MzgwfSwgMHhjMDAwMGVjZWEwKQoJL3NyYy92ZW5kb3IvZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy9zZXJ2ZXIuZ286MTczNyArMHhjYTYKZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy4oKlNlcnZlcikuc2VydmVTdHJlYW1zLmZ1bmMxLjEoKQoJL3NyYy92ZW5kb3IvZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy9zZXJ2ZXIuZ286OTg2ICsweDhjCmNyZWF0ZWQgYnkgZ29vZ2xlLmdvbGFuZy5vcmcvZ3JwYy4oKlNlcnZlcikuc2VydmVTdHJlYW1zLmZ1bmMxCgkvc3JjL3ZlbmRvci9nb29nbGUuZ29sYW5nLm9yZy9ncnBjL3NlcnZlci5nbzo5OTcgKzB4MTVjCg==")
+        assert_eq!(.Attributes."logging.vi.ru/structure", "access")
+        assert_eq!(.TraceId, "00000000000000000000000000000000")
+        assert_eq!(.TraceFlags, "00")
+        assert_eq!(.Attributes."rpc.server.duration", "1")
+        assert_eq!(.Attributes."user_agent.original", "svc_A-svc_mz-client grpc-php/1.49.0 grpc-c/27.0.0 (linux; chttp2)")
+        assert_eq!(.Attributes."rpc.method", "SellProduct")
+        assert_eq!(.Attributes."rpc.grpc.status_code", "0")
+        assert_eq!(.Attributes."client.address", "192.192.192.41:58930")
+        assert_eq!(.Attributes."rpc.server.request.size", "151")
+        assert_eq!(.Attributes."rpc.server.response.size", "2")
+        assert_eq!(.Attributes."caller", "/src/vendor/git.acme.org/pkg/middleware/grpc-access-log.go:32")
+      '''
+
+###############################################################################
+[[tests]]
+  name = "ulp: it drops service_promo master-cl_01-prod wiothout annotation "
+  no_outputs_from = ["ulp_url_filter"]
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      message = '{"app":"promo-master-cl_01-prod","http.client_ip":"127.0.0.6:33143","http.request_content_length":0,"http.status_code":200,"http.target":"/healthz","http.url":"192.192.192.33:8080/healthz","network.protocol.name":"HTTP","network.protocol.version":"1.1","server.address":"192.192.192.33:8080","url.path":"/healthz","url.query":"","http.referer":"","http.request_id":"","user_agent.original":"kube-probe/1.27","http.scheme":"http","http.method":"GET","exception.stacktrace":"Z29yb3V0aW5lIDMwMTgwIFtydW5uaW5nXToKcnVudGltZS9kZWJ1Zy5TdGFjaygpCgkvdXNyL2xvY2FsL2dvL3NyYy9ydW50aW1lL2RlYnVnL3N0YWNrLmdvOjI0ICsweDVlCmdpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL3psb2cvdjIuTWFyc2hhbFN0YWNrKHsweDA/LCAweDA/fSkKCS9nby9zcmMvZ2l0LnZzZWluc3RydW1lbnRpLm5ldC9wcmljZS9wcm9tby9tdnAvdmVuZG9yL2dpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL3psb2cvdjIvbWFyc2hhbGxlci5nbzo2MCArMHgxMDkKZ2l0aHViLmNvbS9ycy96ZXJvbG9nLigqRXZlbnQpLkVycigweGMwMDAyNmI1ZTAsIHsweDAsIDB4MH0pCgkvZ28vc3JjL2dpdC52c2VpbnN0cnVtZW50aS5uZXQvcHJpY2UvcHJvbW8vbXZwL3ZlbmRvci9naXRodWIuY29tL3JzL3plcm9sb2cvZXZlbnQuZ286Mzk1ICsweDYzCmdpdC52c2VpbnN0cnVtZW50aS5uZXQvcGtnL21pZGRsZXdhcmUubG9nUmVxdWVzdCgweGMwMDBhZmYwZTAsIDB4YzAwMTVjMzgwMCwgezB4YzAwMGFmZjBlMD8sIDB4YzAwMDQ2Zjk1MD8sIDB4MjVjNWE0MD99LCAweGMwMGM2MTczODA/KQoJL2dvL3NyYy9naXQudnNlaW5zdHJ1bWVudGkubmV0L3ByaWNlL3Byb21vL212cC92ZW5kb3IvZ2l0LnZzZWluc3RydW1lbnRpLm5ldC9wa2cvbWlkZGxld2FyZS9odHRwLWFjY2Vzcy1sb2cuZ286NTYgKzB4ZDQKZ2l0LnZzZWluc3RydW1lbnRpLm5ldC9wa2cvbWlkZGxld2FyZS5IVFRQQWNjZXNzTG9nLmZ1bmMxKHsweDE5NzZkMTA/LCAweGMwMDlmMTQ0YjB9LCAweGMwMDE1YzM4MDApCgkvZ28vc3JjL2dpdC52c2VpbnN0cnVtZW50aS5uZXQvcHJpY2UvcHJvbW8vbXZwL3ZlbmRvci9naXQudnNlaW5zdHJ1bWVudGkubmV0L3BrZy9taWRkbGV3YXJlL2h0dHAtYWNjZXNzLWxvZy5nbzoyOCArMHgxNmYKbmV0L2h0dHAuSGFuZGxlckZ1bmMuU2VydmVIVFRQKDB4NDEyNTA1PywgezB4MTk3NmQxMD8sIDB4YzAwOWYxNDRiMD99LCAweDI1ZjcxMDE/KQoJL3Vzci9sb2NhbC9nby9zcmMvbmV0L2h0dHAvc2VydmVyLmdvOjIxMzYgKzB4MjkKZ2l0LnZzZWluc3RydW1lbnRpLm5ldC9wa2cvbWlkZGxld2FyZS5IVFRQUmVjb3ZlcnkuZnVuYzEoezB4MTk3NmQxMD8sIDB4YzAwOWYxNDRiMD99LCAweGMwMGM2MTc1OTA/KQoJL2dvL3NyYy9naXQudnNlaW5zdHJ1bWVudGkubmV0L3ByaWNlL3Byb21vL212cC92ZW5kb3IvZ2l0LnZzZWluc3RydW1lbnRpLm5ldC9wa2cvbWlkZGxld2FyZS9odHRwLWFjY2Vzcy1sb2cuZ286NDEgKzB4ODQKbmV0L2h0dHAuSGFuZGxlckZ1bmMuU2VydmVIVFRQKDB4YzAwMTVjMzcwMD8sIHsweDE5NzZkMTA/LCAweGMwMDlmMTQ0YjA/fSwgMHgwPykKCS91c3IvbG9jYWwvZ28vc3JjL25ldC9odHRwL3NlcnZlci5nbzoyMTM2ICsweDI5CmdpdC52c2VpbnN0cnVtZW50aS5uZXQvcHJpY2UvcHJvbW8vbXZwL2ludGVybmFsL2J1aWxkLigqQnVpbGRlcikuaHR0cFJvdXRlci5NaWRkbGV3YXJlLmZ1bmMxLjEoezB4MTk3NGQzMCwgMHhjMDAwNDBhNzAwfSwgMHhjMDBjNjE3NGQwPykKCS9nby9zcmMvZ2l0LnZzZWluc3RydW1lbnRpLm5ldC9wcmljZS9wcm9tby9tdnAvdmVuZG9yL2dpdGh1Yi5jb20vbmV3cmVsaWMvZ28tYWdlbnQvdjMvaW50ZWdyYXRpb25zL25yZ29yaWxsYS9ucmdvcmlsbGEuZ286MTEwICsweDEwNwpuZXQvaHR0cC5IYW5kbGVyRnVuYy5TZXJ2ZUhUVFAoMHhjMDAxNWMzNjAwPywgezB4MTk3NGQzMD8sIDB4YzAwMDQwYTcwMD99LCAweDdmMDNjYjRiMWRkMD8pCgkvdXNyL2xvY2FsL2dvL3NyYy9uZXQvaHR0cC9zZXJ2ZXIuZ286MjEzNiArMHgyOQpnaXRodWIuY29tL2dvcmlsbGEvbXV4LigqUm91dGVyKS5TZXJ2ZUhUVFAoMHhjMDAwMGFhZDgwLCB7MHgxOTc0ZDMwLCAweGMwMDA0MGE3MDB9LCAweGMwMDA0MWFkMDApCgkvZ28vc3JjL2dpdC52c2VpbnN0cnVtZW50aS5uZXQvcHJpY2UvcHJvbW8vbXZwL3ZlbmRvci9naXRodWIuY29tL2dvcmlsbGEvbXV4L211eC5nbzoyMTAgKzB4MWM1Cm5ldC9odHRwLnNlcnZlckhhbmRsZXIuU2VydmVIVFRQKHsweGMwMGJkZTQ1NDA/fSwgezB4MTk3NGQzMD8sIDB4YzAwMDQwYTcwMD99LCAweDY/KQoJL3Vzci9sb2NhbC9nby9zcmMvbmV0L2h0dHAvc2VydmVyLmdvOjI5MzggKzB4OGUKbmV0L2h0dHAuKCpjb25uKS5zZXJ2ZSgweGMwMDAwZWI3MTAsIHsweDE5NzhmMTAsIDB4YzAwMDA0MDQ4MH0pCgkvdXNyL2xvY2FsL2dvL3NyYy9uZXQvaHR0cC9zZXJ2ZXIuZ286MjAwOSArMHg1ZjQKY3JlYXRlZCBieSBuZXQvaHR0cC4oKlNlcnZlcikuU2VydmUgaW4gZ29yb3V0aW5lIDEzCgkvdXNyL2xvY2FsL2dvL3NyYy9uZXQvaHR0cC9zZXJ2ZXIuZ286MzA4NiArMHg1Y2IK","logging.vi.ru/structure":"access","http.response_content_length":0,"http.request.duration":0.001794458,"ts":"{{ test_event_date }}","caller":"/go/src/git.acme.org/price/promo/mvp/vendor/git.acme.org/pkg/middleware/http-access-log.go:61"}'
+
+###############################################################################
+[[tests]]
+  name = "ulp: it returns multiple items in PipelineError"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message с полем ts не в unix timestamp и некорректным полем http.url
+      message = '{ "ts": "this_is_not_timestamp","nginx.request_id": "6a432b1e521b042789c1e984aee21127","user": "user123","client.address": "192.192.192.236","server.address": "nn.example.org","http.request.body.size": "4799","http.response.body.size": "14720","network.protocol.name": "HTTP/1.1","http.request.method": "GET","http.url": "12345","http.request.header.referer": "https://www.example.org/","user_agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0","http.request.duration": "0.3","http.response.status_code": "200","nginx.upstream_addr": "127.0.0.1:4000","nginx.upstream_bytes_received": "14693","upstream_response_time": "0.217","upstream_status": "200" }'
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.PipelineError, "TimestampError; InvalidTimestamp; InvalidURL")
+       '''
+
+###############################################################################
+[[tests]]
+  name = "ulp: it returns UnacceptableDate pipeline error if date before year 2000"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      # message с полем ts не в unix timestamp и некорректным полем http.url
+      message = '{ "ts": "0000-09-21 00:12:43.145224191Z","nginx.request_id": "6a432b1e521b042789c1e984aee21127","user": "user123","client.address": "192.192.192.236","server.address": "nn.example.org","http.request.body.size": "4799","http.response.body.size": "14720","network.protocol.name": "HTTP/1.1","http.request.method": "GET","url.full": "https://www.example.org","http.request.header.referer": "https://www.example.org/","user_agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0","http.request.duration": "0.3","http.response.status_code": "200","nginx.upstream_addr": "127.0.0.1:4000","nginx.upstream_bytes_received": "14693","upstream_response_time": "0.217","upstream_status": "200" }'
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.PipelineError, "TimestampError; UnacceptableDate")
+       '''
+
+###############################################################################
+[[tests]]
+  name = "ulp: it receives logs from non kubernetes env"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+      '"host.name"' = "cl_02-ERP1C-APP01"
+      timestamp = "2024-05-23T07:43:08Z"
+      # установлено на агенте при отправке
+      '"logging.vi.ru/unified_log_model"' = true
+      '"service.name"' = "service-at-vm-no-k8s"
+
+      message = '{"context":"Форма.Записать : Документ.ВзаимозачетЗадолженности.Форма.ФормаДокумента","duration":0,"event_class":"EXCP","event_level":"2","exception":{"message":"src\\basic\\src\\DocumentLogFormObjController.cpp(942):afd2b550-0d52-4e03-b448-15ed68d87ac5: Данные были изменены или удалены другим пользователем"},"p_process_name":"erp","process":{"executable":{"name":"rphost"},"pid":"8952"},"session":{"id":"72423"},"t_connect_id":"298445","ts":"{{ test_event_date }}","user":"Новикова Елена Германовна"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.ServiceName, "service-at-vm-no-k8s")
+        assert_eq!(.Attributes, { "context": "Форма.Записать : Документ.ВзаимозачетЗадолженности.Форма.ФормаДокумента", "duration": "0", "event_class": "EXCP", "event_level": "2", "exception.message": "src\\basic\\src\\DocumentLogFormObjController.cpp(942):afd2b550-0d52-4e03-b448-15ed68d87ac5: Данные были изменены или удалены другим пользователем", "p_process_name": "erp", "process.executable.name": "rphost", "process.pid": "8952", "session.id": "72423", "t_connect_id": "298445", "user": "Новикова Елена Германовна" })
+        assert_eq!(.Resource, { "host.name": "cl_02-ERP1C-APP01",  "message.length": "635", "logging.vi.ru/unified_log_model": "true", "source_type": "all_logs_get_service_name_remap", "stream": "stdout", "vector.aggregator": "${HOSTNAME}" })
+        assert_eq!(.Body, "")
+        assert_eq!(.InstrumentationScope, null)
+        assert_eq!(.PipelineError, "")
+        assert_eq!(.PipelineErrorMessage, "")
+      '''
+
+[[tests]]
+  name = "ulp: it processes message as object"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+      '"host.name"' = "cl_02-ERP1C-APP01"
+      timestamp = "{{ test_event_date }}"
+      # установлено на агенте при отправке
+      '"logging.vi.ru/unified_log_model"' = true
+      '"service.name"' = "service-at-vm-no-k8s"
+
+      "message.context" = "Форма.Записать : Документ.ВзаимозачетЗадолженности.Форма.ФормаДокумента"
+      "message.duration" = 0
+      "message.event_class" = "EXCP"
+      "message.event_level" = "2"
+      "message.session.id" = "72423"
+      "message.ts" = "{{ test_event_date }}"
+
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.ServiceName, "service-at-vm-no-k8s")
+        assert_eq!(.Attributes, { "context": "Форма.Записать : Документ.ВзаимозачетЗадолженности.Форма.ФормаДокумента", "duration": "0", "event_class": "EXCP", "event_level": "2", "session.id": "72423" })
+        assert_eq!(.Resource, { "host.name": "cl_02-ERP1C-APP01", "message.length": "254", "logging.vi.ru/unified_log_model": "true", "source_type": "all_logs_get_service_name_remap", "stream": "stdout", "vector.aggregator": "${HOSTNAME}" })
+        assert_eq!(.Body, "")
+        assert_eq!(.InstrumentationScope, null)
+        assert_eq!(.PipelineError, "")
+        assert_eq!(.PipelineErrorMessage, "")
+      '''

@@ -1,0 +1,2 @@
+type = "demo_logs"
+format = "json"

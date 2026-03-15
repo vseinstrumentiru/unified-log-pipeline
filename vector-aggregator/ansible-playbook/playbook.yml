@@ -1,0 +1,90 @@
+---
+- name: Generate Vector aggregator config files
+  hosts: localhost
+  vars:
+    vector_config_templates_source_dir: "templates"
+    vector_config_templates_vrl_source_dir: "{{ vector_config_templates_source_dir }}/vrl"
+    vector_config_output_dir: "{{ playbook_dir }}/.generated/vector_aggregator_config"
+    vector_config_output_dir_vrl: "{{ vector_config_output_dir }}/vrl"
+    vector_environment: "{{ lookup('ansible.builtin.env', 'VECTOR_ENV', default='local-testing') }}"
+
+    clickhouse_endpoint: "{{ lookup('ansible.builtin.env', 'CLICKHOUSE_ENDPOINT', default='http://script-stub-server-replace-me:8123') }}"
+    clickhouse_auth_enabled: False
+    clickhouse_username: "{{ lookup('ansible.builtin.env', 'CLICKHOUSE_USERNAME', default='default') }}"
+    clickhouse_password: "{{ lookup('ansible.builtin.env', 'CLICKHOUSE_PASSWORD', default='') }}"
+
+  vars_files:
+    - vars/unified_log_pipeline_vars.yml
+    - vars/ulp_metrics-catalog.{{ vector_environment }}.yml
+
+  tasks:
+    - name: Remove old config directory
+      ansible.builtin.file:
+        state: absent
+        path: "{{ vector_config_output_dir }}"
+      delegate_to: localhost
+      ignore_errors: yes
+      changed_when: true # Всегда отмечаем как changed для идемпотентности
+
+    - name: Create fresh output directories
+      ansible.builtin.file:
+        state: directory
+        path: "{{ item }}"
+        mode: "0775"
+      loop:
+        - "{{ vector_config_output_dir }}"
+        - "{{ vector_config_output_dir_vrl }}"
+      delegate_to: localhost
+
+    # Обработка основных конфигов Vector
+    - name: Process Vector configs
+      block:
+        - name: Find Vector templates
+          ansible.builtin.find:
+            path: "{{ vector_config_templates_source_dir }}"
+            recurse: yes
+            patterns: "*.toml.j2"
+            file_type: file
+          register: vector_configs
+          delegate_to: localhost
+
+        - name: Generate config files
+          ansible.builtin.template:
+            src: "{{ item.path }}"
+            dest: "{{ vector_config_output_dir }}/{{ (item.path | dirname).split('/')[-1] }}_{{ item.path | basename | replace('.j2', '') }}"
+            mode: "0666"
+          loop: "{{ vector_configs.files }}"
+          delegate_to: localhost
+
+    # Обработка VRL шаблонов
+    - name: Process VRL templates
+      block:
+        - name: Find VRL templates
+          ansible.builtin.find:
+            path: "{{ vector_config_templates_vrl_source_dir }}"
+            recurse: yes
+            patterns:
+              - "*.vrl.j2"
+              - "*.lua.j2"
+            file_type: file
+          register: vrl_templates
+          delegate_to: localhost
+
+        - name: Generate VRL files
+          ansible.builtin.template:
+            src: "{{ item.path }}"
+            dest: "{{ vector_config_output_dir_vrl }}/{{ item.path | basename | replace('.j2', '') }}"
+            mode: "0666"
+          loop: "{{ vrl_templates.files }}"
+          delegate_to: localhost
+
+    # Фиксация результатов
+    - name: Verify generated files
+      ansible.builtin.command: >
+        sh -c 'ls -la {{ vector_config_output_dir }} &&
+               ls -la {{ vector_config_output_dir_vrl }}'
+      delegate_to: localhost
+      changed_when: false
+
+  tags:
+    - aggregator

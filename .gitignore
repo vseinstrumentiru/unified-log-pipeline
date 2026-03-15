@@ -1,0 +1,4 @@
+.vscode/
+.generated/
+vector-aggregator\.generated
+vector-aggregator\ansible-playbook\.generated

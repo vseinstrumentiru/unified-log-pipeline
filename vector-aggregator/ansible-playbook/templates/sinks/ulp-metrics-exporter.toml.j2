@@ -1,0 +1,8 @@
+[sinks.ulp_metrics_exporter]
+type = "prometheus_exporter"
+inputs = [ "ulp-metrics-cardinality-limiter" ]
+address = "0.0.0.0:9600"
+buckets = [0.005, 0.01, 0.1, 0.2, 0.4, 0.5, 0.8, 1, 2, 2.5, 3, 4, 5, 10, 15, 20]
+flush_period_secs = 60
+default_namespace = "service"
+quantiles = [0.5, 0.75, 0.9, 0.95, 0.99]

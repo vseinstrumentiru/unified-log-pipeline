@@ -1,0 +1,10 @@
+services:
+  ansible:
+    image: quay.io/ansible/ansible-runner:latest
+    volumes:
+      - ./playbook.yml:/runner/project/playbook.yml
+      - ./vars:/runner/project/vars
+      - ./host_vars:/runner/project/host_vars
+      - ./templates:/runner/project/templates
+      - ../.generated:/runner/project/.generated
+    command: ansible-playbook /runner/project/playbook.yml -i "localhost," --connection=local -e 'vector_environment=local-testing' -e 'clickhouse_endpoint=http://clickhouse01:8123'

@@ -1,0 +1,35 @@
+<clickhouse>
+    <logger>
+        <level>information</level>
+        <console>1</console>
+    </logger>
+    <listen_host>0.0.0.0</listen_host>
+    <max_connections>4096</max_connections>
+    <keeper_server>
+        <tcp_port>12181</tcp_port>
+        <server_id>1</server_id>
+        <log_storage_path>/var/lib/clickhouse/coordination/logs</log_storage_path>
+        <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+        <coordination_settings>
+            <operation_timeout_ms>1000</operation_timeout_ms>
+            <min_session_timeout_ms>5000</min_session_timeout_ms>
+            <session_timeout_ms>5000</session_timeout_ms>
+            <heart_beat_interval_ms>200</heart_beat_interval_ms>
+            <raft_logs_level>trace</raft_logs_level>
+            <compress_logs>false</compress_logs>
+            <election_timeout_lower_bound_ms>500</election_timeout_lower_bound_ms>
+            <election_timeout_upper_bound_ms>1000</election_timeout_upper_bound_ms>
+            <!-- All settings listed in https://github.com/ClickHouse/ClickHouse/blob/master/src/Coordination/CoordinationSettings.h -->
+        </coordination_settings>
+        <raft_configuration>
+            <server>
+                <id>1</id>
+                <hostname>clickhouse-keeper</hostname>
+                <port>9234</port>
+                <can_become_leader>true</can_become_leader>
+                <start_as_follower>false</start_as_follower>
+                <priority>1</priority>
+            </server>
+        </raft_configuration>
+    </keeper_server>
+</clickhouse>

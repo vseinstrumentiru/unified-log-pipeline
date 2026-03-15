@@ -1,0 +1,33 @@
+# Set global options
+data_dir = "/var/lib/vector"
+
+# Vector's API (disabled by default)
+# Enable and try it out with the `vector top` command
+[api]
+enabled = false
+# address = "127.0.0.1:8686"
+
+
+[sources.demo_logs_json]
+type = "demo_logs"
+format = "json"
+
+[sources.vector_agent]
+type = "vector"
+address = "0.0.0.0:9110"
+version = "2"
+
+
+[transforms.simple_remap]
+type = "remap"
+inputs = ["demo_logs_json", "vector_agent"]
+source = '''
+  .ObservedTimestamp = to_unix_timestamp(now(), "nanoseconds")
+'''
+
+[sinks.console_sink]
+type = "console"
+inputs = ["simple_remap"]
+
+[sinks.console_sink.encoding]
+codec = "json"

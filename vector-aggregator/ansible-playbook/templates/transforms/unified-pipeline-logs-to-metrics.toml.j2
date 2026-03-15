@@ -1,0 +1,134 @@
+#
+# ВНИМАНИЕ! Эти трансформы жестко связаны с настройками метрик в ulp_metrics-catalog.{{ vector_environment }}.yml, при их изменении необходимо исправить и тесты
+#
+
+###############################################################################
+# ЭТОТ КОД СГЕНЕРИРОВАН
+###############################################################################
+
+{% from 'macro-handle_event_selector.j2' import handle_event_selector with context %}
+
+[transforms.ulp_log_metrics_exclude_filter]
+type = "filter"
+inputs = ["ulp_message_processing"]
+condition = { type = "vrl", source = '''
+    exclude_event = false
+
+    {%- for event_selector in ulp_metrics_catalog.exclude_events -%}
+        {{ handle_event_selector(event_selector, "selectors/" + loop.index0 | string) }}
+    {%- endfor %}
+
+    is_allowed = !exclude_event
+    is_allowed
+''' }
+
+# 1) [x] Создаем трансформ с фильтром под каждую метрику (уникальное имя фильтра с общим префиксом) и reducer для замены
+# 2) Создаем определения метрик под каждую метрику
+# 3) Собираем все источники метрик в общий ulp-log-all-metrics-collector
+
+
+# Проходим по всем namespace и метрикам, создаем условия отбора для событий из input
+{%- set _filter_name_prefix = "ulp-log-include-filter_metric_" %}
+{%- set _reducer_name_prefix = "ulp-log-value-reducer_metric_" %}
+{%- set _collector_name_prefix = "ulp-log-metric-collector_metric_" %}
+{% set _all_collector_inputs = [] %}
+{%- for _metric_namespace, _metric_def in ulp_metrics_catalog.metrics.items() -%}
+    {%- for _metric_name, _metric_conf in _metric_def.items() -%}
+        {%- set _metric_full_name = _metric_namespace + "_" + _metric_name -%}
+        {%- set _filter_name = _filter_name_prefix + _metric_full_name %}
+        {%- set _reducer_name = _reducer_name_prefix + _metric_full_name %}
+        {%- set _collector_name = _collector_name_prefix + _metric_full_name %}
+        {{- _all_collector_inputs.append( _collector_name ) }}
+{{ ' ' }}
+###############################################################################
+# GENERATED CODE. DO NOT CHANGE IT!
+###############################################################################
+
+[transforms.{{ _filter_name }}]
+type = "filter"
+inputs = ["ulp_log_metrics_exclude_filter"]
+condition = '''
+    is_event_matched = false
+
+    {%- for event_selector in _metric_conf.event_selectors -%}
+        {{- handle_event_selector(event_selector, loop.index0 | string) }}
+    {%- endfor %}
+
+    is_allowed = is_event_matched
+    is_allowed
+'''
+{# newline #}
+
+###############################################################################
+# GENERATED CODE. DO NOT CHANGE IT!
+###############################################################################
+
+[transforms.{{ _reducer_name }}]
+type = "remap"
+inputs = [ "{{ _filter_name }}" ]
+source = '''
+    {%- set _string_fields = dict() %}
+{{ '' }}
+# -= label value reducer for: {{ _metric_full_name }} =-
+{{ '' }}
+    {%- for event_selector in _metric_conf.event_selectors -%}
+        # selector_id: {{ loop.index0 | string }}
+{{ '' }}{%- for logfield_name, operator in event_selector.filter.items() -%}
+            {%- if logfield_name not in _string_fields -%}
+                {%- set _= _string_fields.update( {logfield_name: 1 }) -%}
+                .{{ logfield_name }} = to_string(.{{ logfield_name }}) ?? "error:not_a_string:{{ logfield_name | replace('"',"'") | safe }}";
+{{ '' }}
+            {%- endif -%}
+
+            {%- if operator.re is defined -%}
+                {%- if operator.re != "" -%}
+                    {%- if operator.label_override is defined and operator.label_override != "" -%}
+                        .{{ logfield_name }} = replace(.{{ logfield_name }}, r'{{ operator.re }}', s'{{ operator.label_override }}');
+                    {% else -%}
+                        # no label_override
+                    {% endif -%}
+                {%- else -%}
+                    Build text: ERROR: invalid regexp '{{ operator.re }}' for {{ _metric_namespace }}/{{ _metric_name }}, selector: {{ selector_conf.selector }}, filter: re
+                {%- endif -%}
+{{ '' }}
+            {%- endif -%}
+
+        {%- endfor %}
+    {%- endfor %}
+'''
+{{ ' ' }}
+{# newline #}
+
+###
+### GENERATED METRCS DEFINITIONS
+###
+###############################################################################
+
+[transforms.{{ _collector_name }}]
+type = "log_to_metric"
+inputs = [ "{{ _reducer_name }}" ]
+
+  [[transforms.{{ _collector_name }}.metrics]]
+    type = "{{ _metric_conf.metric_type }}"
+    field = "{{ _metric_conf.group_by_logfield }}"
+{% if _metric_namespace != "" %}
+    namespace = "{{ _metric_namespace }}"
+{% endif %}
+    name = "{{ _metric_name }}"
+
+    [transforms.{{ _collector_name }}.metrics.tags]
+      environment = "{{ vector_environment }}"
+      {% for label, logfield in _metric_conf.label_logfield_mapping.items() -%}
+      {{ label }} = "{{ '{{' }}{{ logfield }}{{ '}}' }}"
+      {% endfor %}
+
+  {% endfor %}
+{% endfor %}
+
+
+###############################################################################
+
+[transforms.ulp-log-all-metrics-collector]
+type = "filter"
+inputs = [{{ _all_collector_inputs | map("to_json") | join(',')}}]
+condition = '''true'''

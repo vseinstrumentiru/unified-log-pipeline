@@ -1,0 +1,32 @@
+[transforms.all_logs_get_service_name_remap]
+type = "remap"
+inputs = ["vector_agent"] # для прода еще Kafka
+source = '''
+    ServiceName = "unknown_service"
+    if !is_nullish(."service.name") {
+        ServiceName = strip_whitespace(string!(del(."service.name")))
+    } else if exists(.kubernetes) {
+        # pod аннотация service_name приоритетнее, чем service_name в namespace_label
+        if !is_nullish(.kubernetes.pod_annotations."tags.vi.ru/service_name") {
+            ServiceName = strip_whitespace(to_string!(del(.kubernetes.pod_annotations."tags.vi.ru/service_name")))
+        } else if !is_nullish(.kubernetes.namespace_labels."tags.vi.ru/service_name") {
+            ServiceName = strip_whitespace(to_string!(del(.kubernetes.namespace_labels."tags.vi.ru/service_name")))
+        }
+    }
+    .ServiceName = ServiceName
+'''
+
+[transforms.all_logs_base_router]
+type = "route"
+# включаем сброс в _unmatched route - будет содержать все не совпавшие собыитя (не ulp_logs), это зарезервированное имя потока
+reroute_unmatched = true
+inputs = ["all_logs_get_service_name_remap"]
+    [transforms.all_logs_base_router.route]
+        ulp_logs = '''
+            service_excluded = includes([{{ unified_log_pipeline_vars.excluded_services | map("to_json") | join(",") }}], .ServiceName)
+            source_type_exluded = includes([{{ unified_log_pipeline_vars.excluded_source_types | map("to_json") | join(",") }}], .source_type)
+            ulp_events_excluded = service_excluded || source_type_exluded
+
+            route_matched = !ulp_events_excluded
+            route_matched
+        '''

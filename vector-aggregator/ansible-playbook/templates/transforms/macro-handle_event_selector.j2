@@ -1,0 +1,38 @@
+{%- macro handle_event_selector(event_selector, selector_id) %}
+ || # selector_id: {{ selector_id }}
+((  true
+    {%- for logfield_name, operator in event_selector.filter.items() -%}
+{# newline #}
+{# Тут выполняем выбор оператора сравнения и констуируем выражение -#}
+{# DEBUG: {{ logfield_name }}: {{ fconf }} -#}
+    {{' '}}
+        {%- if operator.eq is defined and operator.eq != "" -%}
+            && includes([to_string!(.{{ logfield_name }})], "{{ operator.eq }}")
+
+        {%- elif operator.neq is defined and operator.neq != "" -%}
+            && !includes([to_string!(.{{ logfield_name }})], "{{ operator.neq }}")
+
+        {%- elif operator.re is defined -%}
+            {%- if operator.re != "" -%}
+                && match(to_string!(.{{ logfield_name }}), r'{{ operator.re }}')
+            {%- else -%}
+                Build text: ERROR: invalid regexp '{{ operator.re }}' for {{ namespace }}/{{ metric_name }}, selector: {{ event_selector.selector }}, filter: re
+            {%- endif -%}
+
+        {%- elif operator.nre is defined -%}
+            {%- if operator.nre != "" -%}
+                && !match(.{{ logfield_name }}, r'{{ operator.nre }}')
+            {%- else -%}
+                Build text: ERROR: invalid regexp '{{ operator.nre }}' for {{ namespace }}/{{ metric_name }}, selector: {{ event_selector.selector }}, filter: nre
+            {%- endif -%}
+
+        {%- elif operator.oneOfRe is defined -%}
+            && match_any!(.{{ logfield_name }}, [
+                {%- for one_re in operator.oneOfRe %}
+                    r'{{ one_re }}',
+                {%- endfor %}
+            ])
+        {%- endif -%}
+    {%- endfor %}
+  ))
+{%- endmacro %}

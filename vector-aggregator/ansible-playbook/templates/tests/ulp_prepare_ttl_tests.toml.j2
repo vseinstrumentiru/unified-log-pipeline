@@ -1,0 +1,196 @@
+{% set test_event_date = now(utc=true,fmt='%Y-%m-%dT%H:%M:%SZ') -%}
+
+[[tests]]
+  name = "ulp_prepare_ttl: it sets TTL ({{ vector_environment }} env)"
+
+  [[tests.inputs]]
+    insert_at = "ulp_prepare_ttl"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      "PipelineError" = ""
+      "Attributes.\"logging.vi.ru/ttl\"" = "{{ ulp.allowed_ttl_days[-1] }}d"
+      "Resource.\"env\"" = "{{ vector_environment }}"
+
+
+  [[tests.outputs]]
+    extract_from = "ulp_prepare_ttl"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.Attributes."logging.vi.ru/ttl", "{{ ulp.allowed_ttl_days[-1] }}d")
+        assert_eq!(.PipelineError, "")
+        assert_eq!(.TTL, {{ ulp.allowed_ttl_days[-1] }})
+       '''
+
+[[tests]]
+  name = "ulp_prepare_ttl: it sets TTL default if ttl value unsupported ({{ vector_environment }} env)"
+
+  [[tests.inputs]]
+    insert_at = "ulp_prepare_ttl"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      "PipelineError" = ""
+      "Attributes.\"logging.vi.ru/ttl\"" = "777d"
+      "Resource.\"env\"" = "{{ vector_environment }}"
+
+  [[tests.outputs]]
+    extract_from = "ulp_prepare_ttl"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.Attributes."logging.vi.ru/ttl", "777d")
+        assert_eq!(.TTL,  {{ ulp.default_ttl_days }})
+        assert_eq!(.PipelineError, ", Unsupported log TTL value. Default used")
+       '''
+
+[[tests]]
+  name = "ulp_prepare_ttl: it sets default value if TTL invalid ({{ vector_environment }} env)"
+
+  [[tests.inputs]]
+    insert_at = "ulp_prepare_ttl"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      "PipelineError" = ""
+      "Attributes.\"logging.vi.ru/ttl\"" = "13 days"
+      "Resource.\"env\"" = "{{ vector_environment }}"
+
+  [[tests.outputs]]
+    extract_from = "ulp_prepare_ttl"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.Attributes."logging.vi.ru/ttl", "13 days")
+        assert_eq!(.TTL, {{ ulp.default_ttl_days }})
+        assert_eq!(.PipelineError, ", Unsupported log TTL value. Default used" )
+       '''
+
+[[tests]]
+  name = "kafka->...->ulp_prepare_ttl: it sets TTL ({{ vector_environment }} env)"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_st"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.192.192.42"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      ".env" = "{{ vector_environment }}"
+
+      message = '{"service.name":"svc_mz","logging.vi.ru/structure":"access","trace_id":"00000000000000000000000000000000","trace_flags":"00","rpc.server.duration":1,"user_agent.original":"svc_A-svc_mz-client grpc-php/1.49.0 grpc-c/27.0.0 (linux; chttp2)","rpc.method":"SellProduct","rpc.grpc.status_code":0,"client.address":"192.192.192.41:58930","rpc.server.request.size":151,"rpc.server.response.size":2,"ts":"{{ test_event_date }}","caller":"/src/vendor/git.acme.org/pkg/middleware/grpc-access-log.go:32", "logging.vi.ru/ttl": "{{ ulp.allowed_ttl_days[-1] }}d" }'
+
+  [[tests.outputs]]
+    extract_from = "ulp_prepare_ttl"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        # добавлено в transforms.ulp_prepare_ttl
+        assert_eq!(.Attributes."logging.vi.ru/ttl", "{{ ulp.allowed_ttl_days[-1] }}d")
+        assert_eq!(.PipelineError, "")
+        assert_eq!(.TTL, {{ ulp.allowed_ttl_days[-1] }})
+
+        # добавлено в предыдущих
+        assert_eq!(.Resource.source_type, "all_logs_get_service_name_remap")
+        assert_eq!(.Resource.stream, "stdout")
+        assert_eq!(.Resource."kubernetes.pod_labels.app_name", "svc_st")
+        assert_eq!(.Resource.k8s_service_name, "test::cluster_name")
+        assert_eq!(.Resource."kubernetes.pod_name", "pcb_svc-7df5b6b4bc-p3w45")
+        assert_eq!(.Resource."kubernetes.pod_labels.pod-template-hash", "7df5b6b4bc")
+        assert_eq!(.Resource."kubernetes.pod_ip", "192.192.192.42")
+        assert_eq!(.Resource."kubernetes.pod_namespace", "test-app-namespace")
+        assert_eq!(.Resource."kubernetes.container_name", "test-app-ws")
+        assert_eq!(.Resource."kubernetes.container_image", "pkg-store/k8s/test-app-ws-image:93dsd2-42")
+        assert_eq!(.Resource."kubernetes.pod_owner", "some_user")
+        assert_eq!(.Resource."kubernetes.node_labels.beta.kubernetes.io/os", "amd64")
+        assert_eq!(.Resource."kubernetes.node_labels.node.deckhouse.io/type", "Static")
+
+        assert!(exists(.Resource))
+        assert!(exists(.ObservedTimestamp))
+
+        assert!(exists(.Timestamp))
+
+        assert!(exists(.SeverityNumber))
+        assert_eq!(.SeverityNumber, null)
+
+        assert!(exists(.InstrumentationScope))
+        assert_eq!(.InstrumentationScope, null)
+
+        assert!(exists(.PipelineError))
+        assert_eq!(.PipelineError, "")
+
+        assert_eq!(.Attributes."service.name", "svc_mz")
+        assert_eq!(.Attributes."logging.vi.ru/structure", "access")
+        assert_eq!(.TraceId, "00000000000000000000000000000000")
+        assert_eq!(.TraceFlags, "00")
+        assert_eq!(.Attributes."rpc.server.duration", "1")
+        assert_eq!(.Attributes."user_agent.original", "svc_A-svc_mz-client grpc-php/1.49.0 grpc-c/27.0.0 (linux; chttp2)")
+        assert_eq!(.Attributes."rpc.method", "SellProduct")
+        assert_eq!(.Attributes."rpc.grpc.status_code", "0")
+        assert_eq!(.Attributes."client.address", "192.192.192.41:58930")
+        assert_eq!(.Attributes."rpc.server.request.size", "151")
+        assert_eq!(.Attributes."rpc.server.response.size", "2")
+        assert_eq!(.Attributes."caller", "/src/vendor/git.acme.org/pkg/middleware/grpc-access-log.go:32")
+      '''
+
+[[tests]]
+  name = "ulp_prepare_ttl: it sets default TTL if ttl annotation has empty value ({{ vector_environment }} env)"
+
+  [[tests.inputs]]
+    insert_at = "ulp_prepare_ttl"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      "PipelineError" = ""
+      "Attributes.\"logging.vi.ru/ttl\"" = ""
+      "Resource.\"env\"" = "{{ vector_environment }}"
+
+  [[tests.outputs]]
+    extract_from = "ulp_prepare_ttl"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.PipelineError, ", Unsupported log TTL value. Default used")
+        assert_eq!(.Attributes."logging.vi.ru/ttl", "")
+        assert_eq!(.TTL, {{ ulp.default_ttl_days }})
+      '''
+
+[[tests]]
+  name = "ulp_prepare_ttl: it sets default TTL if ttl is not defined ({{ vector_environment }} env)"
+
+  [[tests.inputs]]
+    insert_at = "ulp_prepare_ttl"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      "PipelineError" = ""
+      "Resource.\"env\"" = "{{ vector_environment }}"
+
+  [[tests.outputs]]
+    extract_from = "ulp_prepare_ttl"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.PipelineError, ", Unsupported log TTL value. Default used")
+        assert_eq!(.TTL, {{ ulp.default_ttl_days }})
+       '''

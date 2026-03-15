@@ -1,0 +1,6 @@
+[transforms.ulp_output_to_sinks]
+type = "remap"
+inputs = ["ulp_prepare_ttl"]
+source = '''
+  .PassedULP = "yes"
+'''

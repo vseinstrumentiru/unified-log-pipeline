@@ -1,0 +1,97 @@
+# Внимание! Трансформ для подчесета метрик типа @log_to_metric" обязательно должен иметь в имени префикс "ulp-internal-metric_",
+# это сделано для упрощения подключения таких трансформов к sink, потому что трансформ ulp-metrics-cardinality-limiter использует
+# input с имемем по маске "ulp-internal-metric_*" мы можем добавить все нужные нам трансформы ulp в него, не перечисляя явно.
+
+
+
+# Подсчет метрик по логам полностью прошедших ULP, в разрезе service_name, env
+
+[transforms.ulp_int_metric_prepare]
+type = "remap"
+inputs = ["ulp_message_processing"]
+source = '''
+    .env = .Resource.env || "UNKNOWN"
+    .env = to_string(.env) ?? "INVALID" # INVALID - если вдруг это массив или объект
+'''
+
+
+# Метрика для подсчета количества логов
+
+[transforms.ulp-internal-metric_logs_total]
+type = "log_to_metric"
+inputs = [ "ulp_int_metric_prepare" ]
+
+  [[transforms.ulp-internal-metric_logs_total.metrics]]
+  type = "counter"
+  field = "Body"
+  name = "logs_total"
+  namespace = "ulp"
+
+    [transforms.ulp-internal-metric_logs_total.metrics.tags]
+    env = "{{ '{{' }}env{{ '}}' }}"
+    service_name = "{{ '{{' }}ServiceName{{ '}}' }}"
+    environment = "{{ vector_environment }}"
+    level = "{{ '{{' }}SeverityText{{ '}}' }}"
+
+
+# Метрика для подсчета общего объема логов
+
+[transforms.ulp-internal-metric_logs_size_bytes_total]
+type = "log_to_metric"
+inputs = [ "ulp_int_metric_prepare" ]
+
+  [[transforms.ulp-internal-metric_logs_size_bytes_total.metrics]]
+  type = "counter"
+  field = 'Resource."message.length"'
+  name = "logs_size_bytes_total"
+  namespace = "ulp"
+  increment_by_value = true
+
+    [transforms.ulp-internal-metric_logs_size_bytes_total.metrics.tags]
+    env = "{{ '{{' }}env{{ '}}' }}"
+    service_name = "{{ '{{' }}ServiceName{{ '}}' }}"
+    environment = "{{ vector_environment }}"
+    level = "{{ '{{' }}SeverityText{{ '}}' }}"
+
+
+# Подсчет метрик по логам из Kubernetes среды, в разрезе namespace и cluster_name
+
+[transforms.ulp_int_metric_k8s_logs_separator]
+type = "route"
+inputs = ["all_logs_base_router.ulp_logs"]
+# NOTE: остальные кроме k8s пока считать не будем, так как все в итоге пойдет через ULP на dev-контуре, потому reroute_unmatched не использовано тут
+
+    [transforms.ulp_int_metric_k8s_logs_separator.route]
+    k8s_logs = 'exists(.kubernetes.pod_namespace)'
+    # в _unmatched идут остальные ulp логи (prod)
+
+[transforms.ulp_int_metric_k8s_logs_prepare]
+type = "remap"
+inputs = ["ulp_int_metric_k8s_logs_separator.k8s_logs"]
+source = '''
+    .namespace = .kubernetes.pod_namespace || "UNKNOWN"
+    .namespace = to_string(.namespace) ?? "INVALID" # INVALID - если вдруг это массив или объект
+
+    # TODO: удалить k8s_service_name, когда удалите на агентах, испоьлзовать только k8s_cluster_name
+    .cluster_name = del(.k8s_cluster_name) || del(.k8s_service_name) || "UNKNOWN"
+    .cluster_name = to_string(.cluster_name) ?? "INVALID" # INVALID - если вдруг это массив или объект
+
+    .env = to_string(.env) ?? "INVALID" # INVALID - если вдруг это массив или объект
+     if (.env == "") { .env = "UNKNOWN" }
+'''
+
+[transforms.ulp-internal-metric_k8s_logs_total]
+type = "log_to_metric"
+inputs = [ "ulp_int_metric_k8s_logs_prepare" ]
+
+  [[transforms.ulp-internal-metric_k8s_logs_total.metrics]]
+  type = "counter"
+  field = "message"
+  name = "k8s_logs_total"
+  namespace = "ulp"
+
+    [transforms.ulp-internal-metric_k8s_logs_total.metrics.tags]
+    cluster_name = "{{ '{{' }}cluster_name{{ '}}' }}"
+    namespace = "{{ '{{' }}namespace{{ '}}' }}"
+    env = "{{ '{{' }}env{{ '}}' }}"
+    environment = "{{ vector_environment }}"

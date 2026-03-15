@@ -1,0 +1,5 @@
+type = "remap"
+inputs = ["demo_logs_json", "vector_agent"]
+source = '''
+  .ObservedTimestamp = to_unix_timestamp(now(), "nanoseconds")
+'''

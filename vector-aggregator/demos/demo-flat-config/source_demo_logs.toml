@@ -1,0 +1,3 @@
+[sources.demo_logs_json]
+type = "demo_logs"
+format = "json"

@@ -1,0 +1,133 @@
+{% set test_event_date = now(utc=true,fmt='%Y-%m-%dT%H:%M:%SZ') -%}
+
+[[tests]]
+  name = "ulp: it processes log with json arrays in values"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      "kubernetes.pod_labels.app_name" = "svc_sproduction"
+      k8s_service_name = "test::cluster_name"
+      "kubernetes.pod_name" = "pcb_svc-7df5b6b4bc-p3w45"
+      "kubernetes.pod_labels.\"pod-template-hash\"" = "7df5b6b4bc"
+      "kubernetes.pod_ip" = "192.12.13.14"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+      "kubernetes.container_image" = "pkg-store/k8s/test-app-ws-image:93dsd2-42"
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "ab_svc"
+      "kubernetes.pod_owner" = "some_user"
+      "kubernetes.node_labels.beta.\"kubernetes.io/os\"" = "amd64"
+      "kubernetes.node_labels.node.\"deckhouse.io/type\"" = "Static"
+
+      message = '{"level":"info","service.name":"ab_svc","service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"{{ test_event_date }}","caller":"/src/pkg/logrequest/middleware.go:47","msg":"hooking request body"}'
+
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.Timestamp, to_unix_timestamp(t'{{ test_event_date }}', "nanoseconds"))
+        assert!(exists(.ObservedTimestamp))
+        assert_eq!(.InstrumentationScope, null)
+        assert_eq!(.PipelineError, "")
+
+        assert_eq!(.Body, "hooking request body")
+        assert_eq!(.ServiceName, "ab_svc")
+        assert_eq!(.SeverityText, "info")
+
+        assert!(exists(.Attributes))
+        assert_eq!(.Attributes."body", "{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}")
+        assert_eq!(.Attributes."caller", "/src/pkg/logrequest/middleware.go:47")
+        assert_eq!(.Attributes."component", "middleware_x_request_id")
+        assert_eq!(.Attributes."host", "")
+        assert_eq!(.Attributes."method", "POST")
+        assert_eq!(.Attributes."path", "/api/b/i")
+        assert_eq!(.Attributes."service.build.date", "2024-04-02T13:16:06")
+        assert_eq!(.Attributes."service.name", "ab_svc")
+        assert_eq!(.Attributes."service.vcs.revision", "gitC00L7eV")
+        assert_eq!(.Attributes."service.version", "v1.0.1")
+        assert_eq!(.Attributes."test-array-field", "[1,\"a\",3.21,\"55\"]")
+        assert_eq!(.Attributes."x-request-id", "[\"230e4d1165d4cb0ba2831db2c6c99852\"]")
+
+        assert_eq!(.Resource."source_type", "all_logs_get_service_name_remap")
+      '''
+
+
+[[tests]]
+  name = "ulp: it processes journald logs"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      "CONTAINER_NAME" = "selenoid.service"
+      "CONTAINER_TAG" = "8c0c5165f66b"
+      "IMAGE_NAME" = "aerokube/selenoid =1.10.5"
+      "PRIORITY" = 3
+      "SYSLOG_TIMESTAMP" = "2024-05-27T11 =54 =28.099767594Z"
+      "_CMDLINE" = "/usr/bin/dockerd -H fd =// --containerd=/run/containerd/containerd.sock"
+      "_COMM" = "dockerd"
+      "_EXE" = "/usr/bin/dockerd"
+      "_GID" = "0"
+      "_PID" = "1282940"
+      "_SELINUX_CONTEXT" = "unconfined\n"
+      "_SOURCE_REALTIME_TIMESTAMP" = "1716810868099774"
+      "_SYSTEMD_CGROUP" = "/system.slice/docker.service"
+      "_SYSTEMD_INVOCATION_ID" = "e1c537e78e9641d4a34cfa62d4821f8c"
+      "_SYSTEMD_SLICE" = "system.slice"
+      "_SYSTEMD_UNIT" = "docker.service"
+      "_TRANSPORT" = "journal"
+      "_UID" = "0"
+      "__MONOTONIC_TIMESTAMP" = "13572157238334"
+      "__REALTIME_TIMESTAMP" = "1716810868100068"
+      "host" = "cl_01c-sel-srv25"
+      '"logging.vi.ru/unified_log_model"' = "true"
+      "message" = "{\"level\":\"3\",\"msg\":\"2024/05/27 11:54:28 [-] [INIT] [Listening on :4444]\",\"ts\":\"{{ test_event_date }}\"}"
+      '"service.name"' = "selenoid"
+      "source_type" = "journald"
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.PipelineError, "")
+        assert_eq!(.PipelineErrorMessage, "")
+        assert_eq!(.ServiceName, "selenoid")
+        assert_eq!(.Attributes, {})
+        assert_eq!(.Resource, {"CONTAINER_NAME":"selenoid.service","message.length":"101","CONTAINER_TAG":"8c0c5165f66b","IMAGE_NAME":"aerokube/selenoid =1.10.5","PRIORITY":"3","SYSLOG_TIMESTAMP":"2024-05-27T11 =54 =28.099767594Z","_CMDLINE":"/usr/bin/dockerd -H fd =// --containerd=/run/containerd/containerd.sock","_COMM":"dockerd","_EXE":"/usr/bin/dockerd","_GID":"0","_PID":"1282940","_SELINUX_CONTEXT":"unconfined\n","_SOURCE_REALTIME_TIMESTAMP":"1716810868099774","_SYSTEMD_CGROUP":"/system.slice/docker.service","_SYSTEMD_INVOCATION_ID":"e1c537e78e9641d4a34cfa62d4821f8c","_SYSTEMD_SLICE":"system.slice","_SYSTEMD_UNIT":"docker.service","_TRANSPORT":"journal","_UID":"0","__MONOTONIC_TIMESTAMP":"13572157238334","__REALTIME_TIMESTAMP":"1716810868100068","host":"cl_01c-sel-srv25","logging.vi.ru/unified_log_model":"true","source_type":"journald","vector.aggregator":"${HOSTNAME}"})
+        assert_eq!(.Body, "2024/05/27 11:54:28 [-] [INIT] [Listening on :4444]")
+        assert_eq!(.SeverityText, "3")
+        assert!(exists(.Timestamp))
+        assert_eq!(.InstrumentationScope, null)
+      '''
+
+
+[[tests]]
+    name = "all_logs_base_router: k8s_ingress logs go to ulp"
+
+    [[tests.inputs]]
+        insert_at = "all_logs_get_service_name_remap"
+        type = "log"
+        [tests.inputs.log_fields]
+            "kubernetes.container_name" = "controller"
+            "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "k8s_ingress"
+            message = '{"msg": "I MUST PASS"}'
+
+    [[tests.outputs]]
+        extract_from = "ulp_message_processing"
+
+        [[tests.outputs.conditions]]
+        type = "vrl"
+        source = '''
+            assert_eq!(.ServiceName, "k8s_ingress")
+        '''

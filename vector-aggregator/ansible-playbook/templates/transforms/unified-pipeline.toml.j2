@@ -1,0 +1,366 @@
+[transforms.ulp_add_internal_fields]
+type = "remap"
+inputs = ["all_logs_base_router.ulp_logs"]
+source = '''
+    ._PipelineError = []
+    if .message == null {
+      .message = ""
+    }
+    msg = .message
+    # если прилетел сформированный объект, а не строка, то берем длину строки его json представления
+    if ( is_object(.message) ) {
+      msg = encode_json(.message)
+    }
+    ."message.length" = length(msg) ?? 0
+'''
+
+[transforms.ulp_check_length]
+type = "route"
+inputs = ["ulp_add_internal_fields"]
+
+    [transforms.ulp_check_length.route]
+    incorrect_logs_length = 'length!(.message) > {{ unified_log_pipeline_vars.max_message_length }}'
+    correct_logs_length = 'length!(.message) <= {{ unified_log_pipeline_vars.max_message_length }}'
+
+
+[transforms.ulp_truncate_long_message]
+type = "remap"
+inputs = ["ulp_check_length.incorrect_logs_length"]
+source = '''
+    .message, err = truncate(.message, limit: {{ unified_log_pipeline_vars.max_message_length }}, suffix: "...")
+    if err != null {
+        abort
+    }
+    ._PipelineError = append!(._PipelineError, ["Trancated", "UnprocessableEntity"])
+'''
+
+
+# Поле .message разбирается как json
+[transforms.ulp_parse_log_record]
+type = "remap"
+inputs = ["ulp_check_length.correct_logs_length"]
+source = '''
+    if ( is_object(.message) ) {
+      .log_record = .message
+    } else { # иначе считаем, что прислали encoded json строку
+        .log_record, err = parse_json(.message)
+        if err != null {
+            ._PipelineError = append!(._PipelineError, ["InvalidJson", "UnprocessableEntity"])
+            ._PipelineErrorMessage = err
+        }
+    }
+'''
+
+
+[transforms.ulp_check_json_route]
+type = "route"
+inputs = ["ulp_parse_log_record"]
+
+    [transforms.ulp_check_json_route.route]
+    unparseable_log_rerods = 'includes(array!(._PipelineError),"InvalidJson")'
+    parsed_log_records = '!includes(array!(._PipelineError),"InvalidJson")'
+
+
+[transforms.ulp_prepare_timestamp]
+type = "remap"
+inputs = ["ulp_check_json_route.parsed_log_records"]
+source = '''
+    if exists(.log_record.datetime) {
+      # валидное поле, см https://github.com/Seldaek/monolog/blob/main/src/Monolog/LogRecord.php#L114
+      .log_record.ts = del(.log_record.datetime)
+    }
+    # переложим из нестандартных полей в ts
+    if !exists(.log_record.ts) {
+      if exists(.log_record.timestamp) {
+        .log_record.ts = del(.log_record.timestamp)
+      } else if exists(.log_record.time) {
+        .log_record.ts = del(.log_record.time)
+      } else if exists(.log_record.date_time) {
+        .log_record.ts = del(.log_record.date_time)
+      }
+
+      if exists(.log_record.ts)  {
+        # отметка, что исходно время пришло в нестандартом поле (не код ошибки)
+        warning = "NonStandardTimeField"
+        ._PipelineError = append!(._PipelineError, [warning])
+      }
+    }
+'''
+
+[transforms.ulp_check_unix_timestamp]
+type = "remap"
+inputs = ["ulp_prepare_timestamp"]
+source = '''
+    if !exists(._PipelineError) {
+      ._PipelineError = [""]
+    }
+    ERR_TIMESTAMP_ERROR = "TimestampError"
+    ERR_NO_TIMESTAMP = "NoTimestamp"
+    ERR_INVALID_TIMESTAMP_TYPE = "InvalidTimestampType"
+    ERR_INVALID_TIMESTAMP = "InvalidTimestamp"
+    ERR_UNACCEPTABLE_DATE = "UnacceptableDate"
+    ERR_TOO_OLD_TIMESTAMP = "TooOldTimestamp"
+
+    ONE_DAY_SECONDS = 24 * 3600
+
+    if !exists(.log_record.ts) {
+      ._PipelineError = append!(._PipelineError, [ERR_TIMESTAMP_ERROR, ERR_NO_TIMESTAMP])
+      ._PipelineErrorMessage = "Message has no supported timestamp field"
+    } else {
+      tsStr, err = to_string(.log_record.ts)
+      if err != null {
+        ._PipelineError = append!(._PipelineError, [ERR_TIMESTAMP_ERROR, ERR_INVALID_TIMESTAMP_TYPE])
+        ._PipelineErrorMessage = "Field with timestamp contains object, expected string"
+      } else {
+        timestampTs, err = parse_timestamp(tsStr, "%+")
+        if err != null {
+          ._PipelineError = append!(._PipelineError, [ERR_TIMESTAMP_ERROR, ERR_INVALID_TIMESTAMP])
+          ._PipelineErrorMessage = err
+        } else {
+          #TODO: заменить на ша timestampTs <  SMALLEST_ALLOWED_TIMESTAMP, где SMALLEST_ALLOWED_TIMESTAMP = t'2000-01-01T00:00:00Z' после перехода на версию 0.40.0 или выше.
+          # для версии 0.33.1 используем проверку строки, c 0.40.0 можно будет сравнивать даты
+          tsFullString = to_string(timestampTs) # для дат меньше 100 года возвращает 00NN-MM-DD
+          if !starts_with(tsFullString, "2") {
+            ._PipelineError = append!(._PipelineError, [ERR_TIMESTAMP_ERROR, ERR_UNACCEPTABLE_DATE])
+            ._PipelineErrorMessage = "Unacceptable date, only dates after year 2000 accepted"
+          } else {
+            logAgeInSeconds = to_unix_timestamp(now(), "seconds") - to_unix_timestamp(timestampTs, "seconds")
+            if logAgeInSeconds > ONE_DAY_SECONDS {
+                ._PipelineError = append!(._PipelineError, [ERR_TIMESTAMP_ERROR, ERR_TOO_OLD_TIMESTAMP])
+                ._PipelineErrorMessage = "Log timestamp too old, event occured more than 24 hours ago"
+            } else {
+                .Timestamp = to_unix_timestamp(timestampTs, "nanoseconds")
+                del(.log_record.ts) # удаляем, чтобы не попало в атрибуты отдельным полем
+            }
+          }
+        }
+      }
+    }
+'''
+
+
+# Фильтр по level
+[transforms.ulp_level_filter]
+type = "filter"
+inputs = ["ulp_check_unix_timestamp"]
+condition = { type = "vrl", source = '''
+    is_allowed = true
+    if (!is_null(.log_record.level)) {
+      excluded_levels = [ {{ unified_log_pipeline_vars.excluded_severity_text | map('regex_replace', '^(.*)$', '"\\1"') | join(', ') }} ]
+      is_allowed = true && !includes(excluded_levels, upcase(to_string!(.log_record.level)))
+    }
+
+    # отдаем решение обязательно
+    is_allowed
+    ''' }
+
+
+[transforms.ulp_check_parse_url]
+type = "remap"
+inputs = ["ulp_level_filter"]
+source = '''
+  url = del(.log_record."url.full") || del(.log_record."http.url")
+
+  if (!is_null(url)) {
+    # Пробуем парсить URL
+    parsed_http_url, err = parse_url(url, default_known_ports: true)
+    if (err != null) {
+        ._PipelineError = append!(._PipelineError, ["InvalidURL"])
+        ._PipelineErrorMessage = err
+    } else {
+        # Разложим на части url
+        .log_record."url.scheme" = parsed_http_url.scheme
+        .log_record."url.host" = parsed_http_url.host
+        .log_record."url.path" = parsed_http_url.path
+        .log_record."url.port" = parsed_http_url.port
+
+        if (length!(parsed_http_url.query) > 0) {
+            .log_record."url.query" = parsed_http_url.query
+        }
+    }
+  }
+'''
+
+
+[transforms.ulp_url_filter]
+type = "filter"
+inputs = ["ulp_check_parse_url"]
+condition = { type = "vrl", source = '''
+  if (!is_null(.log_record."url.path")) {
+    is_url_path_filtered = true {% for level_url_path_name in unified_log_pipeline_vars.excluded_url_path %} && !includes([string("{{ level_url_path_name }}")], string!(.log_record."url.path")) {% endfor %}
+
+    # Условие фильтра
+    is_url_path_filtered
+  } else {
+    is_url_path_filtered = true
+
+    # отдаем решение обязательно
+    is_url_path_filtered
+  }
+''' }
+
+
+[transforms.ulp_message_processing]
+type = "remap"
+inputs = [
+    "ulp_truncate_long_message",
+    "ulp_check_json_route.unparseable_log_rerods",
+    "ulp_url_filter"
+]
+source = '''
+    UnifiedLogModel = {}
+    UnifiedLogModel.ServiceName = del(.ServiceName)
+    UnifiedLogModel.Body = ""
+    UnifiedLogModel.SeverityNumber = null
+    UnifiedLogModel.Attributes = {}
+    UnifiedLogModel.Resource = {}
+
+    UnifiedLogModel.InstrumentationScope = null
+
+    raw_message = del(.message)
+    logAttrs = del(.log_record)
+
+    isUnprocessableLogRecord = includes(array!(._PipelineError), "UnprocessableEntity")
+    if (isUnprocessableLogRecord) {
+        if (!is_null(raw_message)) {
+            if ( is_object(raw_message) || is_array(raw_message)) { {# выше может в .message быть не строка, а структура см. ulp_parse_log_record #}
+              UnifiedLogModel.Body = encode_json(raw_message)
+            } else { {#  поле Body записать целиком сообщение без разбора #}
+              UnifiedLogModel.Body = raw_message
+            }
+        }
+         # отметить fatal логи golang из runtime уровнем FATAL
+        if (starts_with(to_string!(UnifiedLogModel.Body), "fatal error:")) {
+            UnifiedLogModel.SeverityText = "FATAL"
+            UnifiedLogModel.SeverityNumber = 21
+            # Сохраним части ошибки
+            error_text = replace!(UnifiedLogModel.Body, r'\r', "")
+            error_parts = split(error_text, r'\n', limit: 2)
+            if length(error_parts) > 0 { # текст ошибки
+                logAttrs."exception.message" = error_parts[0]
+            }
+            if length(error_parts) > 1 { # stacktrace если есть
+                logAttrs."exception.stacktrace" = error_parts[1]
+            }
+        }
+    } else {
+        # Переименование общих необязательных полей
+        if (!is_null(logAttrs.trace_id)) {
+            UnifiedLogModel.TraceId, err = to_string(del(logAttrs.trace_id))
+            if err != null {
+                ._PipelineError = append!(._PipelineError, ["InvalidTraceIDFieldType"])
+                ._PipelineErrorMessage = "trace_id field value can not be converted into a string"
+            }
+        }
+        if (!is_null(logAttrs.span_id)) {
+            UnifiedLogModel.SpanId, err = to_string(del(logAttrs.span_id))
+            if err != null {
+                ._PipelineError = append!(._PipelineError, ["InvalidSpanIDFieldType"])
+                ._PipelineErrorMessage = "span_id field value can not be converted into a string"
+            }
+        }
+        if (!is_null(logAttrs.trace_flags)) {
+            UnifiedLogModel.TraceFlags, err = to_string(del(logAttrs.trace_flags))
+            if err != null {
+                ._PipelineError = append!(._PipelineError, ["InvalidTraceFlagsFieldType"])
+                ._PipelineErrorMessage = "trace_flags field value can not be converted into a string"
+            }
+        }
+
+        if (!is_null(logAttrs.level)) {
+            UnifiedLogModel.SeverityText, err = to_string(del(logAttrs.level))
+            if err != null {
+                ._PipelineError = append!(._PipelineError, ["InvalidLevelFieldType"])
+                ._PipelineErrorMessage = "level field value can not be converted into a string"
+            }
+        }
+
+        if (!is_null(logAttrs.msg)) {
+            UnifiedLogModel.Body, err = to_string(del(logAttrs.msg))
+            if err != null {
+                ._PipelineError = append!(._PipelineError, ["InvaldMsgFieldType"])
+                ._PipelineErrorMessage = "Invald msg field value, string expected"
+            }
+        }
+
+        if (!is_null(.Timestamp)) {
+            UnifiedLogModel.Timestamp = del(.Timestamp)
+        }
+    }
+
+    UnifiedLogModel.PipelineError = join!(del(._PipelineError), separator: "; ")
+    UnifiedLogModel.PipelineErrorMessage = to_string!(del(._PipelineErrorMessage))
+
+    # Удаляем время которое добавляет сам vector
+    del(.timestamp)
+
+    if (!is_null(logAttrs)) {
+      attrs = flatten!(logAttrs)
+      attrs = map_keys(attrs) -> |key| { to_string(key) }
+      attrs = map_values(attrs) -> |value| {
+        if is_array(value) {
+          value = encode_json(value)
+        } else {
+          value = to_string!(value)
+        }
+        value
+      }
+      UnifiedLogModel.Attributes = attrs
+    }
+
+    resources = flatten(del(.))
+    resources = map_keys(resources) -> |key| { to_string(key) }
+    resources = map_values(resources) -> |value| {
+      if is_array(value) {
+        value = encode_json(value)
+      } else {
+        value = to_string!(value)
+      }
+      value
+    }
+    UnifiedLogModel.Resource = resources
+    # Время обработки лога агрегатором
+    UnifiedLogModel.ObservedTimestamp = to_unix_timestamp(now(), "nanoseconds")
+    UnifiedLogModel.Resource."vector.aggregator" = "${HOSTNAME}"
+
+    . = UnifiedLogModel
+'''
+
+[transforms.ulp_prepare_ttl]
+type = "remap"
+inputs = [ "ulp_message_processing" ]
+source = '''
+{% if ulp.default_ttl_days in ulp.allowed_ttl_days -%}
+  ALLOWED_TTLS = [{% for ttl in ulp.allowed_ttl_days %}"{{ ttl }}d"{% if not loop.last %}, {% endif %}{% endfor %}]
+  DEFAULT_TTL_DAYS = {{ ulp.default_ttl_days }}
+{% else %}
+  {{ _ | mandatory(msg="ERROR: invalid ulp.default_ttl_days value in config, it must be one of ulp.allowed_ttl_days") }}
+{% endif %}
+  ttl = ""
+
+  if (!is_null(.Attributes."logging.vi.ru/ttl")) {
+    ttl = to_string!(.Attributes."logging.vi.ru/ttl")
+  } else if (!is_null(.Attributes."extra.log_ttl")) { # For php monolog
+    ttl = to_string!(.Attributes."extra.log_ttl")
+  }
+
+  ttl_days = DEFAULT_TTL_DAYS
+
+  err_msg = ""
+  isTTLValueSupported = includes(ALLOWED_TTLS, ttl)
+  if !isTTLValueSupported {
+    err_msg = "Unsupported log TTL value. Default used"
+  } else {
+    ttl_days, err = parse_duration(ttl, unit: "d")
+    if err != null {
+      err_msg = "Invalid log TTL value. Default used"
+    }
+  }
+
+  .TTL = to_int(ttl_days)
+  TTLErrorsFound = (err_msg != "")
+  if TTLErrorsFound {
+    .PipelineError = join!([.PipelineError, err_msg], separator: ", ")
+  }
+
+'''

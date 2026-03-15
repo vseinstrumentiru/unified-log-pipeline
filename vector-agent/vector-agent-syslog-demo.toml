@@ -1,0 +1,47 @@
+[sources.demo_logs_json]
+type = "demo_logs"
+format = "shuffle"
+decoding.codec = "native_json"
+count = 10000
+interval = 0.5
+lines = [
+  '''
+  {
+    "log": {
+      "generated_by": "demo-source"
+      "kubernetes": {
+          "namespace_labels": {
+              "tags.vi.ru/service_name": "A-service"
+          },
+        },
+      "message": "{ \"ts\": \"2024-04-02T13:15:00.000Z\",\"nginx.request_id\": \"6a432b1e521b042789c1e984aee21127\",\"user\": \"user123\",\"client.address\": \"192.192.192.236\",\"server.address\": \"nn.example.org\",\"http.request.body.size\": \"4799\",\"http.response.body.size\": \"14720\",\"network.protocol.name\": \"HTTP\/1.1\",\"http.request.method\": \"GET\",\"http.url\": \"https:\/\/vector.dev\/healthz#array\",\"http.request.header.referer\": \"https:\/\/www.example.org\/\",\"user_agent\": \"Mozilla\/5.0 (Windows NT 6.1; Win64; x64; rv:108.0) Gecko\/20100101 Firefox\/108.0\",\"http.request.duration\": \"0.3\",\"http.response.status_code\": \"200\",\"nginx.upstream_addr\": \"127.0.0.1:4000\",\"nginx.upstream_bytes_received\": \"14693\",\"upstream_response_time\": \"0.217\",\"upstream_status\": \"200\" }",
+      "timestamp": "2025-10-07T07:10:10.10Z"
+    }
+  }
+  ''',
+  '''
+  {
+    "log": {
+        "generated_by": "demo-source",
+        "kubernetes": {
+          "namespace_labels": {
+              "tags.vi.ru/service_name": "B-service"
+          },
+          "pod_name": "pcb_svc-7df5b6b4bc-p3w45",
+          "pod_ip": "192.12.13.14",
+          "pod_namespace": "test-app-namespace",
+          "env": "production",
+          "k8s_cluster_name": "test::cluster_name2"
+        },
+        "message": "{\"level\":\"info\",\"service.name\":\"ab_svc\",\"service.version\":\"v1.0.1\",\"service.build.date\":\"2024-04-02T13:16:16\",\"service.vcs.revision\":\"gitC00L7eV\",\"component\":\"middleware_x_request_id\",\"method\":\"POST\",\"host\":\"\",\"path\":\"\/api\/b\/i\",\"x-request-id\":[\"230e4d1165d4cb0ba2831db2c6c99852\"],\"body\":\"{\\\"order_guids\\\":[\\\"2de09954-456e-41a1-ae45-d18e651989cb\\\"]}\", \"test-array-field\":[1, \"a\", 3.21, \"55\"], \"ts\":\"2024-04-02T13:16:06.000Z\",\"caller\":\"\/src\/pkg\/logrequest\/middleware.go:47\",\"msg\":\"message 1\"}",
+        "timestamp": "2025-10-07T07:20:20.20Z"
+    }
+  }
+  ''',
+]
+
+
+[sinks.vector_aggregator_sink]
+type = "vector"
+inputs = ["demo_logs_json"]
+address = "vector-aggregator:9110"

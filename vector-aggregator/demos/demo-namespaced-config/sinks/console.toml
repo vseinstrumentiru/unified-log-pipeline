@@ -1,0 +1,4 @@
+type = "console"
+inputs = ["simple_remap"]
+[encoding]
+codec = "json"

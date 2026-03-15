@@ -1,0 +1,184 @@
+services:
+  # ClickHouse Cluster
+  clickhouse01:
+    image: clickhouse/clickhouse-server:24.10.3
+    container_name: clickhouse01
+    volumes:
+      - ./clickhouse/configs/clickhouse01/config.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./clickhouse/configs/server-users.xml:/etc/clickhouse-server/users.xml:ro
+    ports:
+      - "8123:8123" # Доступ с хоста
+      - "9000:9000"
+    healthcheck:
+      test: wget --no-verbose --tries=1 http://127.0.0.1:8123/ping || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ulp-net
+
+  clickhouse02:
+    image: clickhouse/clickhouse-server:24.10.3
+    container_name: clickhouse02
+    depends_on:
+      clickhouse01:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/configs/clickhouse02/config.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./clickhouse/configs/server-users.xml:/etc/clickhouse-server/users.xml:ro
+    ports:
+      - "8124:8123"
+      - "9001:9000"
+    healthcheck:
+      test: wget --no-verbose --tries=1 http://127.0.0.1:8123/ping || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ulp-net
+
+  clickhouse03:
+    image: clickhouse/clickhouse-server:24.10.3
+    container_name: clickhouse03
+    depends_on:
+      clickhouse02:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/configs/clickhouse03/config.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./clickhouse/configs/server-users.xml:/etc/clickhouse-server/users.xml:ro
+    ports:
+      - "8125:8123"
+      - "9002:9000"
+    healthcheck:
+      test: wget --no-verbose --tries=1 http://127.0.0.1:8123/ping || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ulp-net
+
+  clickhouse-keeper:
+    image: clickhouse/clickhouse-server:24.10.3
+    container_name: clickhouse-keeper
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+    depends_on:
+      clickhouse03:
+        condition: service_healthy
+      clickhouse02:
+        condition: service_healthy
+      clickhouse01:
+        condition: service_healthy
+    entrypoint:
+      [
+        "clickhouse",
+        "keeper",
+        "--config-file=/etc/clickhouse-server/config-keeper.xml",
+      ]
+    volumes:
+      - ./clickhouse/configs/keeper-config.xml:/etc/clickhouse-server/config-keeper.xml:ro
+    ports:
+      - "12181:12181"
+    networks:
+      - ulp-net
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "echo stat | clickhouse-keeper-client --host localhost --port 12181 | grep -q 'Mode: standalone'",
+        ]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+
+  clickhouse-setup:
+    image: clickhouse/clickhouse-server:24.10.3
+    container_name: clickhouse-setup
+    depends_on:
+      clickhouse-keeper:
+        condition: service_healthy
+    restart: "no"
+    volumes:
+      - ./clickhouse/setup/init_cluster.sql:/init_cluster.sql:ro
+      - ./clickhouse/setup/init_cluster.sh:/init_cluster.sh:ro
+    entrypoint: ["/bin/bash", "/init_cluster.sh"]
+    networks:
+      - ulp-net
+
+  vector-config-generator:
+    image: quay.io/ansible/ansible-runner:stable-2.12-latest
+    container_name: vector-config-generator
+    restart: no
+    volumes:
+      - ./vector-aggregator/ansible-playbook/playbook.yml:/runner/project/playbook.yml:ro
+      - ./vector-aggregator/ansible-playbook/vars:/runner/project/vars:ro
+      - ./vector-aggregator/ansible-playbook/host_vars:/runner/project/host_vars:ro
+      - ./vector-aggregator/ansible-playbook/templates:/runner/project/templates:ro
+      - ./vector-aggregator/.generated:/runner/project/.generated
+    command: ansible-playbook /runner/project/playbook.yml -i "localhost," --connection=local -e 'vector_environment=local-testing' -e 'clickhouse_endpoint=http://clickhouse01:8123' -e vector_config_output_dir=/runner/project/.generated/vector_aggregator_config
+    networks:
+      - ulp-net
+
+  vector-config-tester:
+    image: timberio/vector:0.45.0-debian
+    depends_on:
+      vector-config-generator:
+        condition: service_completed_successfully
+    container_name: vector-config-tester
+    restart: no
+    volumes:
+      - ./vector-aggregator/.generated/vector_aggregator_config:/etc/vector:ro
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - |
+        set -x
+        echo Validating vector config...
+        vector validate --config-toml /etc/vector/*.toml --no-environment
+        echo Run vector config tests...
+        vector test --config-dir /etc/vector
+    networks:
+      - ulp-net
+
+  # Vector Aggregator
+  vector-aggregator:
+    image: timberio/vector:0.45.0-debian
+    container_name: vector-aggregator
+    depends_on:
+      vector-config-tester:
+        condition: service_completed_successfully
+      clickhouse-setup:
+        condition: service_completed_successfully
+    volumes:
+      - ./vector-aggregator/.generated/vector_aggregator_config:/etc/vector:ro
+    command: ["--config-dir", "/etc/vector"]
+    ports:
+      - "9110:9110" # Для vector source
+    networks:
+      - ulp-net
+
+  vector-agent-syslog-demo:
+    image: timberio/vector:0.45.0-debian
+    container_name: vector-agent-syslog-demo
+    depends_on:
+      vector-aggregator:
+        condition: service_started
+    volumes:
+      - ./vector-agent:/etc/vector:ro
+    command: ["--config-dir", "/etc/vector"]
+    networks:
+      - ulp-net
+
+networks:
+  ulp-net:
+    driver: bridge
+
+volumes:
+  clickhouse_data01:
+  clickhouse_data02:
+  clickhouse_data03:

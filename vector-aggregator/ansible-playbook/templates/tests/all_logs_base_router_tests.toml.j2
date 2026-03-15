@@ -1,0 +1,79 @@
+
+[[tests]]
+    name = "all_logs_get_service_name_remap: .ServiceName gets from namespace label if pod annotations are not present"
+
+    [[tests.inputs]]
+        insert_at = "all_logs_get_service_name_remap"
+        type = "log"
+        [tests.inputs.log_fields]
+            "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "new_service_name_label"
+            message = '{"msg": "I MUST PASS"}'
+
+    [[tests.outputs]]
+        extract_from = "all_logs_get_service_name_remap"
+
+    [[tests.outputs.conditions]]
+        type = "vrl"
+        source = '''
+            assert_eq!(.ServiceName, "new_service_name_label")
+        '''
+
+[[tests]]
+    name = "all_logs_get_service_name_remap: .ServiceName gets from new pod annotation, even if namespace label is present"
+
+    [[tests.inputs]]
+        insert_at = "all_logs_get_service_name_remap"
+        type = "log"
+        [tests.inputs.log_fields]
+            "kubernetes.pod_annotations.\"tags.vi.ru/service_name\"" = "new_service_name_annotation"
+            "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "new_service_name_label"
+            message = '{"msg": "I MUST PASS"}'
+
+    [[tests.outputs]]
+        extract_from = "all_logs_get_service_name_remap"
+
+    [[tests.outputs.conditions]]
+        type = "vrl"
+        source = '''
+            assert_eq!(.ServiceName, "new_service_name_annotation")
+        '''
+
+[[tests]]
+    name = "all_logs_base_router: k8s log goes to ULP even if it doesn't include service name"
+
+    [[tests.inputs]]
+        insert_at = "all_logs_get_service_name_remap"
+        type = "log"
+        [tests.inputs.log_fields]
+            "kubernetes.container_name" = "super-container"
+            message = '{"msg": "I MUST PASS"}'
+
+    [[tests.outputs]]
+        extract_from = "all_logs_base_router.ulp_logs"
+
+        [[tests.outputs.conditions]]
+        type = "vrl"
+        source = '''
+            assert_eq!(.ServiceName, "unknown_service")
+        '''
+{% if vector_environment == 'production'%}
+[[tests]]
+    name = "all_logs_base_router: k8s log doesn't go to ULP if it contains excluded service name"
+
+    [[tests.inputs]]
+        insert_at = "all_logs_get_service_name_remap"
+        type = "log"
+        [tests.inputs.log_fields]
+            "kubernetes.container_name" = "super-container"
+            "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "svc_A"
+            message = '{"msg": "I MUST PASS"}'
+
+    [[tests.outputs]]
+        extract_from = "all_logs_base_router._unmatched"
+
+        [[tests.outputs.conditions]]
+        type = "vrl"
+        source = '''
+            assert_eq!(.ServiceName, "svc_A")
+        '''
+{% endif %}

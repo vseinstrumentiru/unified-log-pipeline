@@ -1,0 +1,47 @@
+
+[[tests]]
+  name = "ulp_message_processing: it marks go fatal error as SeverityText = FATAL"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      message = 'fatal error: concurrent map read and map write'
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.PipelineError, "InvalidJson; UnprocessableEntity")
+
+        assert_eq!(.Body, "fatal error: concurrent map read and map write")
+        assert_eq!(.SeverityText, "FATAL")
+        assert_eq!(.SeverityNumber, 21)
+        assert_eq!(.Attributes."exception.message", "fatal error: concurrent map read and map write")
+       '''
+
+[[tests]]
+  name = "ulp_message_processing: it parses go fatal error with stacktrace"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      "_PipelineError" = "UnprocessableEntity"
+      "message" = "fatal error: concurrent map read and map write\r\ngoroutine 829256 [running]:\r\nstacktrace_here"
+      "Resource.\"env\"" = "{{ vector_environment }}"
+
+
+  [[tests.outputs]]
+    extract_from = "ulp_message_processing"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.Attributes."exception.message", "fatal error: concurrent map read and map write")
+        assert_eq!(.Attributes."exception.stacktrace", "goroutine 829256 [running]:\nstacktrace_here")
+       '''

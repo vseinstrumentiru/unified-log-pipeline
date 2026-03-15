@@ -1,0 +1,4 @@
+---
+ulp:
+  allowed_ttl_days: [2, 4]
+  default_ttl_days: 4

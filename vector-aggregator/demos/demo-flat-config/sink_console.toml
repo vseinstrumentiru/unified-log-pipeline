@@ -1,0 +1,7 @@
+
+[sinks.console]
+type = "console"
+inputs = ["simple_remap"]
+
+[sinks.console.encoding]
+codec = "json"

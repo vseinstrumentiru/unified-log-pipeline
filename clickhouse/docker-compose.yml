@@ -1,0 +1,59 @@
+services:
+  clickhouse01:
+    image: clickhouse/clickhouse-server:24.10.3
+    container_name: clickhouse01
+    volumes:
+      - clickhouse_data01:/var/lib/clickhouse
+      - ./configs/clickhouse01/config.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./configs/server-users.xml:/etc/clickhouse-server/users.xml:ro
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    networks:
+      - clickhouse-net
+
+  clickhouse02:
+    image: clickhouse/clickhouse-server:24.10.3
+    container_name: clickhouse02
+    volumes:
+      - clickhouse_data02:/var/lib/clickhouse
+      - ./configs/clickhouse02/config.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./configs/server-users.xml:/etc/clickhouse-server/users.xml:ro
+    ports:
+      - "8124:8123"
+      - "9001:9000"
+    networks:
+      - clickhouse-net
+
+  clickhouse03:
+    image: clickhouse/clickhouse-server:24.10.3
+    container_name: clickhouse03
+    volumes:
+      - clickhouse_data03:/var/lib/clickhouse
+      - ./configs/clickhouse03/config.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./configs/server-users.xml:/etc/clickhouse-server/users.xml:ro
+    ports:
+      - "8125:8123"
+      - "9002:9000"
+    networks:
+      - clickhouse-net
+
+  clickhouse-keeper:
+    image: clickhouse/clickhouse-server:24.10.3
+    container_name: clickhouse-keeper
+    entrypoint: ["clickhouse", "keeper", "--config-file=/etc/clickhouse-server/config-keeper.xml"]
+    volumes:
+      - ./configs/keeper-config.xml:/etc/clickhouse-server/config-keeper.xml:ro
+    ports:
+      - "2181:2181"
+    networks:
+      - clickhouse-net
+
+volumes:
+  clickhouse_data01:
+  clickhouse_data02:
+  clickhouse_data03:
+
+networks:
+  clickhouse-net:
+    driver: bridge

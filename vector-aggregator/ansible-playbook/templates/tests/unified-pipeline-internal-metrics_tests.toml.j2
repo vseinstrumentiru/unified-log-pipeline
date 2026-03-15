@@ -1,0 +1,350 @@
+[[tests]]
+  name = "ulp-internal-metric_logs_total: it counts by service_name, env"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      env = "production"
+      k8s_service_name = "test::cluster_name"
+
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":"hooking request body"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_logs_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.service_name, "test::service-name")
+        assert_eq!(.tags.env, "production")
+        assert_eq!(.tags.level, "info")
+       '''
+
+[[tests]]
+  name = "ulp-internal-metric_logs_total: it counts by service_name, env"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      env = "production"
+      k8s_cluster_name = "test::cluster_name2"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":"hooking request body"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_logs_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.service_name, "test::service-name")
+        assert_eq!(.tags.env, "production")
+        assert_eq!(.tags.level, "info")
+       '''
+
+[[tests]]
+  name = "ulp-internal-metric_logs_total: it counts by service_name, env and sets env tag = UNKNOWN"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      # нет поля env
+
+      k8s_cluster_name = "test::cluster_name2"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":"hooking request body"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_logs_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.service_name, "test::service-name")
+        assert_eq!(.tags.env, "UNKNOWN")
+        assert_eq!(.tags.level, "info")
+       '''
+
+[[tests]]
+  name = "ulp-internal-metric_logs_total: it counts by service_name, env if Body empty"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      env = "production"
+      k8s_cluster_name = "test::cluster_name2"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":""}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_logs_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.service_name, "test::service-name")
+        assert_eq!(.tags.env, "production")
+        assert_eq!(.tags.level, "info")
+       '''
+
+
+
+[[tests]]
+  name = "ulp-internal-metric_logs_size_bytes_total: it counts by service_name, env"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      env = "production"
+      k8s_service_name = "test::cluster_name"
+
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":"hooking request body"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_logs_size_bytes_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.service_name, "test::service-name")
+        assert_eq!(.tags.env, "production")
+        assert_eq!(.tags.level, "info")
+       '''
+
+
+[[tests]]
+  name = "ulp-internal-metric_logs_size_bytes_total: it counts by service_name, env"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      env = "production"
+      k8s_cluster_name = "test::cluster_name2"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":"hooking request body"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_logs_size_bytes_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.service_name, "test::service-name")
+        assert_eq!(.tags.env, "production")
+        assert_eq!(.tags.level, "info")
+       '''
+
+
+[[tests]]
+  name = "ulp-internal-metric_logs_size_bytes_total: it counts by service_name, env and sets env tag = UNKNOWN"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      # нет поля env
+
+      k8s_cluster_name = "test::cluster_name2"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":"hooking request body"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_logs_size_bytes_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.service_name, "test::service-name")
+        assert_eq!(.tags.env, "UNKNOWN")
+        assert_eq!(.tags.level, "info")
+       '''
+
+[[tests]]
+  name = "ulp-internal-metric_logs_size_bytes_total: it counts by service_name, env if Body empty"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      env = "production"
+      k8s_cluster_name = "test::cluster_name2"
+      "kubernetes.pod_namespace" = "test-app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":""}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_logs_size_bytes_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.service_name, "test::service-name")
+        assert_eq!(.tags.env, "production")
+        assert_eq!(.tags.level, "info")
+       '''
+
+
+[[tests]]
+  name = "ulp-internal-metric_k8s_logs_total: it counts by pod_namespace, k8s_service_name, env"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      env = "development"
+      k8s_service_name = "test::cluster_name3"
+      "kubernetes.pod_namespace" = "test::app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":"hooking request body"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_k8s_logs_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.namespace, "test::app-namespace")
+        assert_eq!(.tags.cluster_name, "test::cluster_name3")
+        assert_eq!(.tags.env, "development")
+       '''
+
+
+[[tests]]
+  name = "ulp-internal-metric_k8s_logs_total: it counts by pod_namespace, k8s_cluster_name, env"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      env = "development"
+      k8s_cluster_name = "test::cluster_name4"
+      "kubernetes.pod_namespace" = "test::app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":"hooking request body"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_k8s_logs_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.namespace, "test::app-namespace")
+        assert_eq!(.tags.cluster_name, "test::cluster_name4")
+        assert_eq!(.tags.env, "development")
+       '''
+
+[[tests]]
+  name = "ulp-internal-metric_k8s_logs_total: it counts by pod_namespace, k8s_cluster_name, env nad sets env tag = UNKNOWN"
+
+  [[tests.inputs]]
+    insert_at = "all_logs_get_service_name_remap"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      source_type = "all_logs_get_service_name_remap"
+      stream = "stdout"
+
+      env = ""
+      k8s_cluster_name = "test::cluster_name4"
+      "kubernetes.pod_namespace" = "test::app-namespace"
+      "kubernetes.container_name" = "test-app-ws"
+
+      "kubernetes.namespace_labels.\"tags.vi.ru/service_name\"" = "test::service-name"
+
+      message = '{"level":"info", "service.version":"v1.0.1","service.build.date":"2024-04-02T13:16:06","service.vcs.revision":"gitC00L7eV","component":"middleware_x_request_id","method":"POST","host":"","path":"/api/b/i","x-request-id":["230e4d1165d4cb0ba2831db2c6c99852"],"body":"{\"order_guids\":[\"2de09954-456e-41a1-ae45-d18e651989cb\"]}", "test-array-field":[1, "a", 3.21, "55"], "ts":"2024-04-03T08:09:54.969142Z","caller":"/src/pkg/logrequest/middleware.go:47","msg":"hooking request body"}'
+
+  [[tests.outputs]]
+    extract_from = "ulp-internal-metric_k8s_logs_total"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.namespace, "test::app-namespace")
+        assert_eq!(.tags.cluster_name, "test::cluster_name4")
+        assert_eq!(.tags.env, "UNKNOWN")
+       '''

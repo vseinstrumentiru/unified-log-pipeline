@@ -1,0 +1,102 @@
+# yaml-language-server: $schema=../schema/vectordev-metrics-catalog.json
+# Здесь перечислены метрики, собираемые по логам, обрабатываемым Unified Log Pipeline
+#
+# Внимание! Этот файл используется только в тестах пайплайнов. Реальные правила прода расположены в vars/ulp_metrics-catalog.<env_name>.yml
+#
+ulp_metrics_catalog:
+  defaults:
+    # в какой label из какого поля брать значение
+    ulp_access_log_field_mapping: &default_access_log_field_mapping
+      path: Attributes.\"url.path\"
+      method: Attributes.\"http.request.method\"
+      status: Attributes.\"http.response.status_code\"
+      cluster_name: Resource.\"k8s_cluster_name\"
+      container_name: Resource.\"kubernetes.container_name\"
+      service_name: ServiceName
+      env: Resource.env
+  exclude_events:
+    - selector: Не считаем методы OPTION для http
+      filter:
+        Attributes."http.request.method":
+          eq: "OPTIONS"
+    - selector: Не считаем служебные пути проверки доступности /healthz*
+      filter:
+        Attributes."url.path":
+          re: "^/healthz(-nginx)?"
+
+  metrics: # заменить на namespaces
+    vi_test_metric_a:
+      # Тут добавить для читаемости подраздел: metrics
+      requests_total: # требуется для transforms.metrics-http-accesslog-k8s
+        metric_type: counter
+        group_by_logfield: Attributes.\"http.response.status_code\" # по какому полю считаем, число событий (даст в итоге status=200: 1013, status=500: 1)
+        label_logfield_mapping:
+          <<: *default_access_log_field_mapping
+        event_selectors: &global_http_requests_total_event_selectors
+          ## Метрики Интернет магазина
+          ##
+          - selector: "Запросы к главной странице"
+            filter:
+              Attributes."url.path":
+                eq: "/" # оператор и значение для сравнениея
+              Resource."kubernetes.pod_namespace":
+                eq: "testapp-production"
+              ServiceName:
+                eq: "testapp"
+              Attributes."http.request.method":
+                eq: "GET"
+          - selector: "Страница товара"
+            filter:
+              Attributes."url.path":
+                re: "^/product/(?P<name>([^/]+-\\d+/))$"
+                # принудительно меняем значение из regexp-группы совападения
+                label_override: "/product/:name"
+              Resource."kubernetes.pod_namespace":
+                eq: "testapp-production"
+              ServiceName:
+                eq: "testapp"
+          - selector: "Страница производителя"
+            filter:
+              Attributes."url.path":
+                re: "^/vendor/(?P<name>([^/]+-\\d+/))$"
+                label_override: "/vendor/:name"
+              Resource."kubernetes.pod_namespace":
+                eq: "testapp-production"
+              ServiceName:
+                eq: "testapp"
+          - selector: "re-оператор без label_override"
+            filter:
+              Resource."kubernetes.pod_namespace":
+                eq: "testapp-production"
+              ServiceName:
+                eq: "testapp"
+              Attributes."http.request.method":
+                eq: "GET"
+              Attributes."url.path":
+                re: "^/auth/(?P<auth_method>([^/]+))$" # /auth/oauth или /auth/cert
+
+    vi_test_metric_b:
+      my_total:
+        metric_type: counter
+        group_by_logfield: Attributes.\"http.response.status_code\"
+        label_logfield_mapping: &kubedns_label_logfield_mapping
+          vhost: Attributes.\"url.host\"
+          service_name: "ServiceName"
+          k8s_cluster: Resource.\"k8s_cluster_name\"
+          namespace: Resource.\"kubernetes.pod_namespace\"
+          method: Attributes.\"http.request.method\"
+          status: Attributes.\"http.response.status_code\"
+        event_selectors:
+          # фильтры подходящих нам метирик
+          - selector: Все запросы с хостов *local
+            filter:
+              Resource."kubernetes.pod_namespace":
+                eq: "testapp-production"
+              Attributes."url.host":
+                re: ".*local"
+          - selector: Все запросы с хостов *local от testapp2
+            filter:
+              Resource."kubernetes.pod_namespace":
+                eq: "testapp2-production"
+              Attributes."url.host":
+                re: ".*local"

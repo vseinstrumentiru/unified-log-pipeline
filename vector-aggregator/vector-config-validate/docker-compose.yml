@@ -1,0 +1,8 @@
+services:
+  vector:
+    image: timberio/vector:0.45.0-debian
+    container_name: vector-config-validator
+    restart: unless-stopped
+    volumes:
+      - ../.generated/vector_aggregator_config:/etc/vector:ro
+    command: [ "validate",  "--config", "/etc/vector/*.toml", "--no-environment" ]

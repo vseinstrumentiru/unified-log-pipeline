@@ -1,0 +1,24 @@
+unified_log_pipeline_vars:
+  max_message_length: 65536
+
+  excluded_url_path:
+    - "/metrics"
+    - "/healthz"
+    - "/backend-status"
+    - "/_tech/php-ping"
+    - "/healthcheck"
+    - "/healthz/live"
+
+  excluded_severity_text:
+    - "DEBUG"
+    - "TRACE"
+
+  # Не принимать логи от сервисов с этими .ServiceName
+  excluded_services:
+    - my_legacy_svc_a
+    - my_legacy_svc_b
+
+  # Не принимать логи с этими .source_type
+  excluded_source_types:
+    - docker_logs
+    - k8s_audit

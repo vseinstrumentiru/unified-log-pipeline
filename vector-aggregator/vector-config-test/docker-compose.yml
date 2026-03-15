@@ -1,0 +1,23 @@
+services:
+  vector:
+    image: timberio/vector:0.45.0-debian
+    container_name: vector-aggregator_demo-flat-config
+    restart: unless-stopped
+    volumes:
+      - .:/etc/vector:ro
+      - vector_data:/var/lib/vector
+    ports:
+      # Примеры часто используемых портов (настройте под вашу конфигурацию):
+      - "9110:9110"  # Для получение логов от Vector-агентов напрямую
+      # - "8686:8686"  # Для API
+      # - "24224:24224"  # Для fluent forward
+    command: [ "--verbose", "--config", "/etc/vector/*.toml" ]
+    healthcheck:
+      test: ["CMD", "vector", "validate", "--config", "/etc/vector/*.toml", "--no-environment"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+# Persistent volume:
+volumes:
+  vector_data:

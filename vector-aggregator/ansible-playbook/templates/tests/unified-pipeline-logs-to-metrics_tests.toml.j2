@@ -1,0 +1,323 @@
+###############################################################################
+# Tests: ulp_log_metrics_exclude_filter
+#
+[[tests]]
+  name = "ulp_log_metrics_exclude_filter: it filters out excluded entity with OPTIONS method"
+  no_outputs_from = ["ulp_log_metrics_exclude_filter"]
+
+  [[tests.inputs]]
+    insert_at = "ulp_log_metrics_exclude_filter"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      ServiceName = "any"
+      "Resource.\"env\"" = "production"
+      "Resource.\"k8s_cluster_name\"" = "cl_01"
+      "Resource.\"kubernetes.container_name\"" = "nginx"
+      "Resource.\"kubernetes.pod_namespace\"" = "any-ns"
+      "Attributes.\"http.request.method\"" = "OPTIONS" #
+      "Attributes.\"http.response.status_code\"" = "200"
+      "Attributes.\"url.host\"" = "anyapp-local"
+      "Attributes.\"url.path\"" = "/any"
+      "Attributes.\"url.port\"" = "80"
+      "Attributes.\"url.query\"" = ""
+      "Attributes.\"url.scheme\"" = "http"
+
+
+[[tests]]
+  name = "ulp_log_metrics_exclude_filter: it filters out excluded entity with url.path = /healthz"
+  no_outputs_from = ["ulp_log_metrics_exclude_filter"]
+
+  [[tests.inputs]]
+    insert_at = "ulp_log_metrics_exclude_filter"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      ServiceName = "any"
+      "Resource.\"env\"" = "production"
+      "Resource.\"k8s_cluster_name\"" = "cl_01"
+      "Resource.\"kubernetes.container_name\"" = "nginx"
+      "Resource.\"kubernetes.pod_namespace\"" = "any-ns"
+      "Attributes.\"http.request.method\"" = "ANY"
+      "Attributes.\"http.response.status_code\"" = "200"
+      "Attributes.\"url.host\"" = "anyapp-local"
+      "Attributes.\"url.path\"" = "/healthz"
+      "Attributes.\"url.port\"" = "80"
+      "Attributes.\"url.query\"" = ""
+      "Attributes.\"url.scheme\"" = "http"
+
+
+
+[[tests]]
+  name = "ulp_log_metrics_exclude_filter: it allows not excluded entity"
+
+  [[tests.inputs]]
+    insert_at = "ulp_log_metrics_exclude_filter"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      ServiceName = "testapp"
+      "Resource.\"env\"" = "production"
+      "Resource.\"k8s_cluster_name\"" = "cl_01"
+      "Resource.\"kubernetes.container_name\"" = "nginx"
+      "Resource.\"kubernetes.pod_namespace\"" = "testapp-production"
+      "Attributes.\"http.request.method\"" = "GET"
+      "Attributes.\"http.response.status_code\"" = "200"
+      "Attributes.\"url.host\"" = "anyapp-local"
+      "Attributes.\"url.path\"" = "/not-excluded-path"
+      "Attributes.\"url.port\"" = "80"
+      "Attributes.\"url.query\"" = ""
+      "Attributes.\"url.scheme\"" = "http"
+
+  [[tests.outputs]]
+    extract_from = "ulp_log_metrics_exclude_filter"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.ServiceName, "testapp")
+        assert_eq!(.Attributes."url.path", "/not-excluded-path")
+      '''
+
+
+[[tests]]
+  name = "unified-pipeline-logs-to-metrics: it skips counting if event not excluded and no match"
+  no_outputs_from = ["ulp-log-all-metrics-collector"]
+
+  [[tests.inputs]]
+    insert_at = "ulp_log_metrics_exclude_filter"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      ServiceName = "testapp"
+      "Resource.\"env\"" = "production"
+      "Resource.\"k8s_cluster_name\"" = "cl_01"
+      "Resource.\"kubernetes.container_name\"" = "nginx"
+      "Resource.\"kubernetes.pod_namespace\"" = "testapp-THIS_NOT_MATCHES"
+      "Attributes.\"http.request.method\"" = "GET"
+      "Attributes.\"http.response.status_code\"" = "200"
+      "Attributes.\"url.host\"" = "anyapp-local"
+      "Attributes.\"url.path\"" = "/"
+      "Attributes.\"url.port\"" = "80"
+      "Attributes.\"url.query\"" = ""
+      "Attributes.\"url.scheme\"" = "http"
+
+{% if vector_environment == 'local-testing'%}
+# требует при генерации подключать vars/ulp_metrics-catalog.local-testing.yml
+[[tests]]
+  name = "unified-pipeline-logs-to-metrics: it counts defined event as vi_test_metric_a_requests_total"
+
+  [[tests.inputs]]
+    insert_at = "ulp_log_metrics_exclude_filter"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      ServiceName = "testapp"
+      "Resource.\"env\"" = "production"
+      "Resource.\"k8s_cluster_name\"" = "cl_01"
+      "Resource.\"kubernetes.container_name\"" = "nginx"
+      "Resource.\"kubernetes.pod_namespace\"" = "testapp-production"
+      "Attributes.\"http.request.method\"" = "GET"
+      "Attributes.\"http.response.status_code\"" = "200"
+      "Attributes.\"url.host\"" = "anyapp-local"
+      "Attributes.\"url.path\"" = "/"
+      "Attributes.\"url.port\"" = "80"
+      "Attributes.\"url.query\"" = ""
+      "Attributes.\"url.scheme\"" = "http"
+
+
+  [[tests.outputs]]
+    extract_from = "ulp-log-all-metrics-collector"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.namespace, "vi_test_metric_a")
+        assert_eq!(.name, "requests_total")
+        assert_eq!(.tags.method, "GET")
+        assert_eq!(.tags.path, "/")
+      '''
+
+
+[[tests]]
+  name = "unified-pipeline-logs-to-metrics: it counts both metrics if event matched"
+
+  [[tests.inputs]]
+    insert_at = "ulp_log_metrics_exclude_filter"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      ServiceName = "testapp"
+      "Resource.\"env\"" = "production"
+      "Resource.\"k8s_cluster_name\"" = "cl_01"
+      "Resource.\"kubernetes.container_name\"" = "nginx"
+      "Resource.\"kubernetes.pod_namespace\"" = "testapp-production"
+      "Attributes.\"http.request.method\"" = "GET"
+      "Attributes.\"http.response.status_code\"" = "200"
+      "Attributes.\"url.host\"" = "anyapp-local"
+      "Attributes.\"url.path\"" = "/"
+      "Attributes.\"url.port\"" = "80"
+      "Attributes.\"url.query\"" = ""
+      "Attributes.\"url.scheme\"" = "http"
+
+
+  [[tests.outputs]]
+    extract_from = "ulp-log-all-metrics-collector"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.service_name, "testapp")
+        assert_eq!(.tags.method, "GET")
+        assert_eq!(.tags.status, "200")
+
+         (.namespace == "vi_test_metric_a") && {
+          assert_eq!(.namespace, "vi_test_metric_a")
+          assert_eq!(.name, "requests_total")
+          assert_eq!(.tags.path, "/")
+          assert_eq!(.tags.cluster_name, "cl_01")
+          assert_eq!(.tags.container_name, "nginx")
+          assert_eq!(.tags.env, "production")
+          assert!(!exists(.tags.vhost), "vhost не должен быть добавлен")
+          assert!(!exists(.tags.k8s_cluster), "k8s_cluster не должен быть добавлен")
+        }
+        (.namespace == "vi_test_metric_b") && {
+          assert!(!exists(.tags.path), "path не должен быть добавлен")
+          assert_eq!(.tags.vhost, "anyapp-local")
+          assert_eq!(.tags.namespace, "testapp-production")
+          assert_eq!(.tags.k8s_cluster, "cl_01")
+        }
+      '''
+
+
+# тест на reducer
+[[tests]]
+  name = "unified-pipeline-logs-to-metrics: is reduces field value by label_override value"
+
+  [[tests.inputs]]
+    insert_at = "ulp_log_metrics_exclude_filter"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      ServiceName = "testapp"
+      "Resource.\"env\"" = "production"
+      "Resource.\"k8s_cluster_name\"" = "cl_01"
+      "Resource.\"kubernetes.container_name\"" = "nginx"
+      "Resource.\"kubernetes.pod_namespace\"" = "testapp-production"
+      "Resource.\"source_type\"" = "all_logs_get_service_name_remap"
+      "Resource.\"stream\"" = "stdout"
+      "Attributes.\"client.address\"" = "192.192.192.7"
+      "Attributes.\"http.request.body.size\"" = "597"
+      "Attributes.\"http.request.duration\"" = "0.008"
+      "Attributes.\"http.request.header.referer\"" = ""
+      "Attributes.\"http.request.method\"" = "GET"
+      "Attributes.\"http.response.body.size\"" = "262"
+      "Attributes.\"http.response.status_code\"" = "200"
+      "Attributes.\"location\"" = "testapp_root"
+      "Attributes.\"network.protocol.name\"" = "HTTP/1.1"
+      "Attributes.\"nginx.request_id\"" = "4caf6a32131b80c3187fbaa9bce37d5d"
+      "Attributes.\"url.host\"" = "testapp-stage01"
+      "Attributes.\"url.path\"" = "/product/abc-123/"
+      "Attributes.\"url.port\"" = "80"
+      "Attributes.\"url.query\"" = ""
+      "Attributes.\"url.scheme\"" = "http"
+
+
+  [[tests.outputs]]
+    extract_from = "ulp-log-all-metrics-collector"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.namespace, "vi_test_metric_a")
+        assert_eq!(.name, "requests_total")
+        assert_eq!(.tags.service_name, "testapp")
+        assert_eq!(.tags.method, "GET")
+        assert_eq!(.tags.path, "/product/:name") # reduced value
+        assert_eq!(.tags.status, "200")
+        assert_eq!(.tags.cluster_name, "cl_01")
+        assert_eq!(.tags.container_name, "nginx")
+       '''
+
+# # тест что reducer не меняет, что не должен менять
+
+[[tests]]
+  name = "unified-pipeline-logs-to-metrics: is keeps same path value on re match if no label_override"
+
+  [[tests.inputs]]
+    insert_at = "ulp_log_metrics_exclude_filter"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      ServiceName = "testapp"
+      "Resource.\"env\"" = "production"
+      "Resource.\"k8s_cluster_name\"" = "cl_01"
+      "Resource.\"kubernetes.container_name\"" = "nginx"
+      "Resource.\"kubernetes.pod_namespace\"" = "testapp-production"
+      "Resource.\"source_type\"" = "all_logs_get_service_name_remap"
+      "Resource.\"stream\"" = "stdout"
+      "Attributes.\"client.address\"" = "192.192.192.7"
+      "Attributes.\"http.request.body.size\"" = "597"
+      "Attributes.\"http.request.duration\"" = "0.008"
+      "Attributes.\"http.request.header.referer\"" = ""
+      "Attributes.\"http.request.method\"" = "GET"
+      "Attributes.\"http.response.body.size\"" = "262"
+      "Attributes.\"http.response.status_code\"" = "200"
+      "Attributes.\"location\"" = "testapp_root"
+      "Attributes.\"network.protocol.name\"" = "HTTP/1.1"
+      "Attributes.\"nginx.request_id\"" = "4caf6a32131b80c3187fbaa9bce37d5d"
+      "Attributes.\"url.host\"" = "testapp-stage01"
+      "Attributes.\"url.path\"" = "/auth/new-auth-type"
+      "Attributes.\"url.port\"" = "80"
+      "Attributes.\"url.query\"" = ""
+      "Attributes.\"url.scheme\"" = "http"
+
+
+  [[tests.outputs]]
+    extract_from = "ulp-log-all-metrics-collector"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.tags.path, "/auth/new-auth-type")
+       '''
+
+[[tests]]
+  name = "unified-pipeline-logs-to-metrics: it counts event only in vi_test_metric_b_requests_total"
+
+  [[tests.inputs]]
+    insert_at = "ulp_log_metrics_exclude_filter"
+    type = "log"
+
+    [tests.inputs.log_fields]
+      ServiceName = "testapp"
+      "Resource.\"env\"" = "production"
+      "Resource.\"k8s_cluster_name\"" = "cl_01"
+      "Resource.\"kubernetes.container_name\"" = "nginx"
+      "Resource.\"kubernetes.pod_namespace\"" = "testapp2-production"
+      "Attributes.\"http.request.method\"" = "GET"
+      "Attributes.\"http.response.status_code\"" = "200"
+      "Attributes.\"url.host\"" = "anyapp-local"
+      "Attributes.\"url.path\"" = "/anypath"
+      "Attributes.\"url.port\"" = "80"
+      "Attributes.\"url.query\"" = ""
+      "Attributes.\"url.scheme\"" = "http"
+
+
+  [[tests.outputs]]
+    extract_from = "ulp-log-all-metrics-collector"
+
+    [[tests.outputs.conditions]]
+      type = "vrl"
+      source = '''
+        assert_eq!(.namespace, "vi_test_metric_b")
+        assert_eq!(.name, "my_total")
+        assert_eq!(.tags.vhost, "anyapp-local")
+        assert_eq!(.tags.service_name, "testapp")
+        assert_eq!(.tags.k8s_cluster, "cl_01")
+        assert_eq!(.tags.namespace, "testapp2-production")
+        assert_eq!(.tags.method, "GET")
+
+        assert!(!exists(.tags.path))
+      '''
+{% endif %}

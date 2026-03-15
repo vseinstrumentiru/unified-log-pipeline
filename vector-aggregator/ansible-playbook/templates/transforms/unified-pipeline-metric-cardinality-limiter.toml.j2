@@ -1,0 +1,7 @@
+[transforms.ulp-metrics-cardinality-limiter]
+type = "tag_cardinality_limit"
+inputs = [ "ulp-internal-metric_*", "ulp-log-all-metrics-collector" ]
+mode = "probabilistic"
+cache_size_per_key = 5_120_000
+limit_exceeded_action = "drop_tag"
+value_limit = 1000

@@ -1,0 +1,63 @@
+variables:
+  HARBOR_REGISTRY_RO: "harbor.example.org"
+  VECTOR_IMAGE: "docker.io/timberio/vector:0.45.0-debian"
+  ANSIBLE_IMAGE: "quay.io/ansible/ansible-runner:stable-2.12-latest"
+  VECTOR_CONFIG_DIR: ".generated/vector_aggregator_config"
+  VECTOR_CONFIG_DIR_PATH: "${CI_PROJECT_DIR}/${VECTOR_CONFIG_DIR}"
+
+stages:
+  - generate
+  - validate
+  - test
+
+.job-base:
+  tags:
+    - ci-docker
+
+generate-config:
+  extends: .job-base
+  stage: generate
+  image: $ANSIBLE_IMAGE
+  script:
+    - mkdir -p $VECTOR_CONFIG_DIR
+    - |
+      ansible-playbook ./vector-aggregator/ansible-playbook/playbook.yml \
+        -i "localhost," \
+        --connection=local \
+        -e 'vector_environment=local-testing' \
+        -e 'clickhouse_endpoint=http://clickhouse01:8123' \
+        -e "vector_config_output_dir=${VECTOR_CONFIG_DIR_PATH}"
+    - |
+      echo Find all toml files...
+      find ${CI_PROJECT_DIR} -name "*.toml"  # Поиск всех toml-файлов в проекте
+  artifacts:
+    paths:
+      - $VECTOR_CONFIG_DIR
+    expire_in: 1h
+
+validate-config:
+  extends: .job-base
+  stage: validate
+  image: $VECTOR_IMAGE
+  needs: ["generate-config"]
+  script:
+    - echo Vector config dir contents
+    - ls -lR $VECTOR_CONFIG_DIR # Проверяем наличие файлов в артефактах
+    - vector validate --config-dir $VECTOR_CONFIG_DIR --no-environment
+
+test-config:
+  extends: .job-base
+  stage: test
+  image: $VECTOR_IMAGE
+  needs:
+    - job: generate-config
+      artifacts: true # Берем артефакты напрямую из generate
+    - job: validate-config # Только проверяем статус (без артефактов)
+      artifacts: false
+  script:
+    - ls -laR $VECTOR_CONFIG_DIR # Проверка перед тестами
+    - vector test --config-dir $VECTOR_CONFIG_DIR
+  artifacts:
+    paths:
+      - $VECTOR_CONFIG_DIR
+    expire_in: 30 days

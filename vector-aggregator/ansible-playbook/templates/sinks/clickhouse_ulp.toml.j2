@@ -1,0 +1,26 @@
+[sinks.clickhouse_unified_log_model]
+type = "clickhouse"
+inputs = ["ulp_prepare_ttl"]
+database = "unified_logs"
+endpoint = "{{ clickhouse_endpoint }}"
+table = "logs_local"
+
+    # Нужно настраивать подходящие параметры под свой поток, чем меньше поток логов, тем менье нужен max_bytes и max_events
+    # Позволяет вставлять в Clikchouse пачками, что быстрее работает и меньше нагружает его
+    # WARN: Для демо отключено, т.к. малый поток событий
+    {# [sinks.clickhouse_unified_log_model.batch]
+    max_bytes = 10737418240
+    max_events = 70000
+    timeout_secs = 2 #}
+
+{% if clickhouse_auth_enabled == true %}
+    [sinks.clickhouse_unified_log_model.auth]
+    strategy = "basic"
+    user = "{{ clickhouse_username }}"
+    password = "{{ clickhouse_password }}"
+{% endif %}
+
+    [sinks.clickhouse_unified_log_model.buffer]
+    max_events = 1000
+    type = "memory"
+    when_full = "drop_newest"
